@@ -1,0 +1,34 @@
+parameters:
+  - name: javaVersion
+    type: string
+  - name: projectVersion
+    type: string
+  - name: fichierJson
+    type: string
+
+jobs:
+  - job: Package_publish
+    steps:
+      - checkout: self
+        clean: true
+        persistCredentials: true
+      - download: current
+        artifact: drop
+      - bash: cp -rf $(Pipeline.Workspace)/drop/* ./
+      - template: ..\..\steps\set_version_file.yml
+        parameters:
+          fichierJson: ${{parameters.fichierJson}}
+          releaseVersion: ${{parameters.projectVersion}}
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: ${{ parameters.javaVersion }}
+          jdkArchitectureOption: 'x64'
+          jdkSourceOption: 'PreInstalled'
+      - task: Gradle@3
+        env:
+          AZURE_DEVOPS_USER: "Build Service"
+          AZURE_DEVOPS_ACCESS_TOKEN: $(System.AccessToken)
+        inputs:
+          gradleWrapperFile: 'gradlew'
+          tasks: 'publish'
+          javaHomeOption: 'JDKVersion'

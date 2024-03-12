@@ -1,0 +1,59 @@
+#Prend en paramètre la variable versionIncrement
+parameters:
+  - name: versionIncrement
+    type: string
+
+steps:
+  - script: |
+      echo $(System.TeamProject)/_apis/git/repositories/$(Build.Repository.Name)/pullrequestquery?api-version=3.0
+  - task: restCallBuildTask@0
+    displayName: 'Getting pullrequest with API'
+    continueOnError: true
+    inputs:
+      webserviceEndpoint: 'Repos'
+      relativeUrl: '$(System.TeamProject)/_apis/git/repositories/$(Build.Repository.Name)/pullrequestquery?api-version=3.0'
+      httpVerb: 'POST'
+      body: |
+        {
+        "queries" : [{"type":"lastMergeCommit", "items":["$(Build.SourceVersion)"]}]
+        }
+      contentType: 'application/json'
+      saveResponseToFile: true
+      outputFilePath: 'pullRequest.json'
+      allowInvalidSSLCertificate: false
+  - task: LoadJsonVariables@2
+    displayName: 'Reading pullrequest'
+    continueOnError: true
+    inputs:
+      JsonSource: 'pullRequest.json'
+      VariablePrefix: 'pullRequest'
+      MarkAsSecret: false
+  - bash: echo '##vso[task.setvariable variable=versionIncrement;]${{ parameters.versionIncrement }}'
+    displayName: 'Bump init'
+  - bash: echo '##vso[task.setvariable variable=pullRequestTitle;]$(pullRequest_results_0_$(Build.SourceVersion)_0_title)'
+    displayName: 'Getting pullrequest title'
+  - task: shellexec@0
+    displayName: 'Cleaning title'
+    inputs:
+      code: |
+        #! /bin/bash
+        pullRequestTitle="$(pullRequestTitle)"
+        pullRequestTitleWithoutQuotes="$(tr -d "\"\`'" <<<$pullRequestTitle)"
+        echo "##vso[task.setvariable variable=pullRequestTitle;]$pullRequestTitleWithoutQuotes"
+  - task: CmdLine@1
+    displayName: 'Looking for bump in title'
+    inputs:
+      filename: sh
+      arguments: '-c "echo \"##vso[task.setvariable variable=versionSplit;]$(node -p ''\"$(pullRequestTitle)\".toUpperCase().split(\"#VERSION\")[1]'')\"'
+  - task: CmdLine@1
+    displayName: 'Parsing title for bump level'
+    inputs:
+      filename: sh
+      arguments: '-c "echo \"##vso[task.setvariable variable=versionIncrementFromPR;]$(node -p ''\"$(versionSplit)\".split(\" \")[0]'')\"'
+    condition: and(succeeded(), ne(variables['versionSplit'], 'undefined'))
+  - task: CmdLine@1
+    displayName: 'Setting bump from pullrequest title'
+    inputs:
+      filename: sh
+      arguments: '-c "echo \"##vso[task.setvariable variable=versionIncrement;]$(node -p ''\"$(versionIncrementFromPR)\".toLowerCase()'')\"'
+    condition: and(succeeded(), ne(variables['versionIncrementFromPR'], variables['noSuch']))

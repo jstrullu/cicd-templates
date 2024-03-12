@@ -1,0 +1,62 @@
+trigger:
+  - master
+
+parameters:
+  - name: appName
+    displayName: Nom de l'application
+    type: string
+    default: $(Build.Repository.Name)
+  - name: fichierJson
+    type: string
+    default: cicd.json
+  - name: versionIncrement
+    type: string
+    default: 'patch'
+  - name: gradlePath
+    type: string
+  - name: javaVersion
+    type: string
+
+stages:
+  - stage: Initialisation
+    jobs:
+      - template: /jobs/json_semantic_version.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+          fichierJson: ${{ parameters.fichierJson }}
+  - stage: Build
+    dependsOn: Initialisation
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/java/java_gradle_avro_build.yml
+        parameters:
+          javaVersion: ${{ parameters.javaVersion }}
+          projectVersion: $(version)
+          fichierJson: ${{ parameters.fichierJson }}
+  - stage: Publish_Artifact
+    dependsOn: 
+      - Initialisation
+      - Build
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/java/gradle_package_publish.yml
+        parameters:
+          javaVersion: ${{ parameters.javaVersion }}
+          projectVersion: $(version)
+          fichierJson: ${{ parameters.fichierJson }}
+
+  - stage: Finalisation
+    condition: ne(variables['Build.Reason'], 'PullRequest')
+    dependsOn: 
+      - Initialisation
+      - Build
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          fichierJson: ${{ parameters.fichierJson }}
+          language: 'java'

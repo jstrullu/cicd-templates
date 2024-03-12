@@ -1,0 +1,40 @@
+trigger:
+  - master
+
+parameters:
+  - name: versionIncrement
+    type: string
+    default: 'patch'
+  - name: sonarKey
+    type: string
+
+stages:
+  #Initialisation
+  - stage: Initialisation
+    displayName: 'Initialisation and versioning'
+    jobs:
+      - template: /azure-pipelines/jobs/flutter/flutter_version_increment.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+
+  - stage: DeployDev
+    displayName: 'Deploy to Firebase Dev'
+    dependsOn: Initialisation
+    jobs:
+      - template: /azure-pipelines/jobs/flutter/flutter_build_firebase_deploy.yml
+        parameters:
+          sonarKey: ${{parameters.sonarKey}}
+          environment: 'dev'
+          firebaseToken: $(FIREBASE_TOKEN_DEV)
+    condition: eq(variables['Build.SourceBranchName'], 'master')
+
+  - stage: DeployProd
+    displayName: 'Deploy to Firebase Prod'
+    dependsOn: DeployDev
+    jobs:
+      - template: /azure-pipelines/jobs/flutter/flutter_build_firebase_deploy.yml
+        parameters:
+          sonarKey: ${{parameters.sonarKey}}
+          environment: 'prod'
+          firebaseToken: $(FIREBASE_TOKEN_PROD)
+    condition: eq(variables['Build.SourceBranchName'], 'master')

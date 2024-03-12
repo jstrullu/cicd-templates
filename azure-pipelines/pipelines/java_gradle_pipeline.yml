@@ -1,0 +1,84 @@
+trigger:
+  - master
+
+parameters:
+  - name: appName
+    displayName: Nom de l'application
+    type: string
+    default: $(Build.Repository.Name)
+  - name: fichierJson
+    type: string
+    default: cicd.json
+  - name: versionIncrement
+    type: string
+    default: 'patch'
+  - name: gradlePath
+    type: string
+  - name: sonarKey
+    type: string
+  - name: javaVersion
+    type: string
+  - name: dockerRegistry
+    type: string
+
+stages:
+  - stage: Initialisation
+    jobs:
+      - template: /jobs/json_semantic_version.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+          fichierJson: ${{ parameters.fichierJson }}
+  - stage: Build_And_Test
+    dependsOn: Initialisation
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/java/java_gradle_test_and_build.yml
+        parameters:
+          sonarKey: ${{ parameters.sonarKey }}
+          javaVersion: ${{ parameters.javaVersion }}
+          projectVersion: $(version)
+          fichierJson: ${{ parameters.fichierJson }}
+  - stage: Docker_Build_And_Publish
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    dependsOn: 
+      - Initialisation
+      - Build_And_Test
+    jobs:
+      - template: /jobs/docker_build_and_publish.yml
+        parameters:
+          registry: ${{ parameters.dockerRegistry }}
+          projectVersion: $(version)
+
+  - stage: Finalisation
+    condition: ne(variables['Build.Reason'], 'PullRequest')
+    dependsOn: 
+      - Initialisation
+      - Build_And_Test
+      - Docker_Build_And_Publish
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          fichierJson: ${{ parameters.fichierJson }}
+          language: 'java'
+
+  - stage: Deploy_To_Dev
+    condition: ne(variables['Build.Reason'], 'PullRequest')
+    dependsOn: 
+      - Initialisation
+      - Build_And_Test
+      - Docker_Build_And_Publish
+    variables:
+      BUILDID: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/kube_deploy.yml
+        parameters:
+          env: "Dev"
+          resource: "tracker-immo"
+          namespace: "tracker-immo"
+    

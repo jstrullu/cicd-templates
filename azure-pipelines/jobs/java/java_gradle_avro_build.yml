@@ -1,0 +1,35 @@
+parameters:
+  - name: javaVersion
+    type: string
+  - name: projectVersion
+    type: string
+  - name: fichierJson
+    type: string
+
+
+jobs:
+  - job: Build_Test
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        fichierJson: ${{parameters.fichierJson}}
+        releaseVersion: ${{parameters.projectVersion}}
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: ${{ parameters.javaVersion }}
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+    - task: Gradle@3
+      inputs:
+        gradleWrapperFile: 'gradlew'
+        tasks: 'build'
+        publishJUnitResults: false
+        javaHomeOption: 'JDKVersion'
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)'
+        artifact: 'drop'
+        publishLocation: 'pipeline'

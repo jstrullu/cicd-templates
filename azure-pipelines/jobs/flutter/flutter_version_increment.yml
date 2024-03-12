@@ -1,0 +1,75 @@
+parameters:
+  - name: versionIncrement
+    type: string
+    default: patch
+  - name: fichierPubspec
+    type: string
+    default: /**/pubspec.yaml
+
+jobs:
+  - job: Versionning
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - task: FlutterInstall@0
+        displayName: 'Flutter Install'
+        inputs:
+          mode: 'auto'
+          channel: 'stable'
+      - template: ..\..\steps\set_versionIncrement.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+      - task: shellexec@0
+        displayName: 'Dart install'
+        inputs:
+          code: |
+            sudo wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O - | sudo apt-key add -
+            sudo wget https://storage.googleapis.com/download.dartlang.org/linux/debian/dart_stable.list -O /etc/apt/sources.list.d/dart_stable.list
+            sudo apt-get update
+            sudo apt-get install dart
+      - task: FlutterCommand@0
+        displayName: 'Cider activation'
+        inputs:
+          projectDirectory: './src/'
+          arguments: 'pub global activate cider'
+      - bash: |
+            echo $(versionIncrement)
+            export PATH="$PATH":"$HOME/.pub-cache/bin"
+            cd /home/vsts/work/1/s/src/
+            VERSION_TAG=`cider bump $(versionIncrement)` && echo "##vso[task.setvariable variable=releaseVersion]$VERSION_TAG"
+        displayName: 'Version bump'
+
+      - bash: |
+          git config --global user.email "technique@kuenta.fr"
+          git config --global user.name "Service Technique"
+        displayName: 'Set Git User'
+      - task: CmdLine@1
+        displayName: 'Version commit'
+        inputs:
+          filename: git
+          arguments: 'commit -am "***NO_CI*** Set release version to $(releaseVersion)"'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: 'Version tag'
+        inputs:
+          filename: git
+          arguments: 'tag -fa $(Build.SourceBranchName)-$(releaseVersion) -m $(releaseVersion)'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: 'Commit and tag push'
+        inputs:
+          filename: git
+          arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: 'Pipeline name update'
+        inputs:
+          filename: sh
+          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: 'Pullrequest pipeline name update'
+        inputs:
+          filename: sh
+          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) PR $(System.PullRequest.PullRequestId).$(System.PullRequest.PullRequestIteration)"'
+        condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))      

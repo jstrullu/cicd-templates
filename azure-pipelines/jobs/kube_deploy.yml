@@ -1,0 +1,38 @@
+parameters:
+  - name: env
+    type: string
+  - name: resource
+    type: string
+  - name: namespace
+    type: string
+
+jobs:
+  - deployment: Dev
+    pool: 
+      vmImage: ubuntu-latest
+    environment:
+      name: ${{ parameters.env }}.${{ parameters.resource }}
+      resourceType: Kubernetes
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+            clean: true
+            persistCredentials: true
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+            displayName: Replace tokens in yaml
+            inputs:
+              rootDirectory: $(Build.SourcesDirectory)/.kube
+              targetFiles: '**/*.yml'
+              keepToken: true
+              tokenPrefix: __
+              tokenSuffix: __
+          - task: KubernetesManifest@0
+            displayName: Deploy to Kubernetes cluster
+            inputs:
+              action: deploy
+              manifests: |
+                $(Build.SourcesDirectory)/.kube/deployment.yml
+                $(Build.SourcesDirectory)/.kube/service.yml
+              namespace: ${{ parameters.namespace }}

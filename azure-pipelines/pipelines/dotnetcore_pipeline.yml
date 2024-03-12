@@ -1,0 +1,50 @@
+﻿trigger:
+  - master
+
+parameters:
+  - name: versionIncrement
+    type: string
+    default: 'patch'
+  - name: sonarKey
+    type: string
+  - name: securityTargetDir
+    type: string
+  - name: projectFile
+    type: string
+  - name: fichierJson
+    type: string
+
+stages:
+  #Initialisation
+  - stage: Initialisation
+    jobs:
+      - template: /jobs/json_semantic_version.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+          fichierJson: ${{ parameters.fichierJson }}
+          
+  - stage: BuildAndTest
+    displayName: 'Build Test and Sonar'
+    dependsOn: Initialisation
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/dotnetcore/dotnetcore_build_test.yml
+        parameters:
+          sonarProjectKey: ${{parameters.sonarKey}}
+          projectFile: ${{ parameters.projectFile }}
+          projectVersion: $(version)
+  
+  - stage: Finalisation
+    displayName: 'Finalisation'
+    dependsOn:
+      - Initialisation
+      - BuildAndTest
+    variables:
+      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          fichierJson: ${{ parameters.fichierJson }}
+          language: '.net'

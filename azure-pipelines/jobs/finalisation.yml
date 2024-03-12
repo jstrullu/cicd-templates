@@ -1,0 +1,66 @@
+parameters:
+  - name: releaseVersion
+    type: string
+  - name: fichierJson
+    type: string
+  - name: language
+    type: string
+
+jobs:
+  - job: Finalisation
+    steps:
+      - checkout: self
+        clean: true
+        persistCredentials: true
+      - template: ..\steps\set_version_file.yml
+        parameters:
+          fichierJson: ${{parameters.fichierJson}}
+          releaseVersion: ${{parameters.releaseVersion}}
+      
+      - task: NodeTool@0
+        inputs:
+          versionSpec: '18.x'
+        displayName: 'Install Node.js'
+        condition: eq('${{parameters.language}}', 'angular')
+
+      - script: |
+          npm ci
+          npm version ${{ parameters.releaseVersion }} --no-git-tag-version
+        displayName: 'Update de version'
+        condition: eq('${{parameters.language}}', 'angular')
+
+      - task: PowerShell@2
+        displayName: 'Assembly Version Generation'
+        inputs:
+          targetType: 'inline'
+          script: |
+            $ProjectFile = '${{ parameters.projectFile }}'
+            # get a new line with <AssemblyVersion> tag and new version number
+            $NewAssemblyVersionLine = '$(assemblyLine)' -replace '$(currentVersion)', '${{ parameters.releaseVersion }}'
+            # replace the old line with the <AssemblyVersion> tag with a new one
+            (Get-Content $ProjectFile) | Foreach-Object {$_ -replace '$(assemblyLine)', $NewAssemblyVersionLine} | Set-Content $ProjectFile
+        condition: eq('${{parameters.language}}', '.net')
+      
+      - bash: |
+          git config --global user.email "service@slhtech.fr"
+          git config --global user.name "Service"
+        displayName: Set Git User
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: Commit de la version
+        inputs:
+          filename: git
+          arguments: 'commit -am "***NO_CI*** Set release version to ${{parameters.releaseVersion}}"'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: Tag de la version
+        inputs:
+          filename: git
+          arguments: 'tag -fa $(Build.SourceBranchName)-${{parameters.releaseVersion}} -m ${{parameters.releaseVersion}}'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: Push du commit et du tag
+        inputs:
+          filename: git
+          arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))

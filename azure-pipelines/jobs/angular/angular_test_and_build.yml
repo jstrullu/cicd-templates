@@ -1,0 +1,63 @@
+parameters:
+  - name: sonarKey
+    type: string
+  - name: projectVersion
+    type: string
+  - name: fichierJson
+    type: string
+
+
+jobs:
+  - job: Build_Test
+    steps:
+      - checkout: self
+        clean: true
+        persistCredentials: true
+      
+      - task: NodeTool@0
+        inputs:
+          versionSpec: '18.x'
+        displayName: 'Install Node.js'
+        
+      # - task: SonarQubePrepare@5
+      #   inputs:
+      #     SonarQube: 'Sonar'
+      #     scannerMode: 'CLI'
+      #     configMode: 'manual'
+      #     cliProjectKey: ${{ parameters.sonarKey }}
+      #     cliSources: 'src'
+      #     extraProperties: |
+      #       sonar.projectVersion=${{ parameters.projectVersion }}
+
+      - script: |
+          npm install -g @angular/cli
+          npm install
+        displayName: 'npm install'
+
+      - script: |
+          npm version ${{ parameters.projectVersion }} --no-git-tag-version
+        displayName: 'Update version number'
+
+      - script: |
+          npm run generate:openapi
+        displayName: Open Api Generation
+
+      - script: |
+          npm run build
+        displayName: Build
+
+      # - script: |
+      #     ng test --watch=false --browsers ChromeHeadless
+      #   displayName: 'Run Angular tests'
+
+      # - task: SonarQubeAnalyze@5
+
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: '$(Build.SourcesDirectory)'
+          artifact: 'drop'
+          publishLocation: 'pipeline'
+
+      # - task: SonarQubePublish@5
+      #   inputs:
+      #     pollingTimeoutSec: '300'

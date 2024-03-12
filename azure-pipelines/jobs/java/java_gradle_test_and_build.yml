@@ -1,0 +1,54 @@
+parameters:
+  - name: sonarKey
+    type: string
+  - name: javaVersion
+    type: string
+  - name: projectVersion
+    type: string
+  - name: fichierJson
+    type: string
+
+jobs:
+  - job: Build_Test
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        fichierJson: ${{parameters.fichierJson}}
+        releaseVersion: ${{parameters.projectVersion}}
+    - bash: echo ${{parameters.sonarKey}}
+    - ${{ if ne(parameters.sonarKey, ' ') }}:
+      - task: SonarQubePrepare@5
+        inputs:
+          SonarQube: 'sonar'
+          scannerMode: 'Other'
+          extraProperties: |
+            sonar.projectKey=${{ parameters.sonarKey }}
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: ${{ parameters.javaVersion }}
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+    - task: Gradle@3
+      inputs:
+        gradleWrapperFile: 'gradlew'
+        tasks: 'build'
+        publishJUnitResults: false
+        javaHomeOption: 'JDKVersion'
+        ${{ if ne(parameters.sonarKey, ' ') }}:
+          sonarQubeRunAnalysis: true
+          sqGradlePluginVersionChoice: 'specify'
+          sonarQubeGradlePluginVersion: '2.6.1'
+          spotBugsAnalysis: false
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)'
+        artifact: 'drop'
+        publishLocation: 'pipeline'
+    - ${{ if ne(parameters.sonarKey, ' ') }}:
+      - task: SonarQubePublish@5
+        inputs:
+          pollingTimeoutSec: '300'
