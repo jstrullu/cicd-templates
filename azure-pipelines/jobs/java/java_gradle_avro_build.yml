@@ -3,7 +3,7 @@ parameters:
     type: string
   - name: projectVersion
     type: string
-  - name: fichierJson
+  - name: jsonFile
     type: string
 
 
@@ -15,7 +15,7 @@ jobs:
       persistCredentials: true
     - template: ..\..\steps\set_version_file.yml
       parameters:
-        fichierJson: ${{parameters.fichierJson}}
+        jsonFile: ${{parameters.jsonFile}}
         releaseVersion: ${{parameters.projectVersion}}
     - task: JavaToolInstaller@0
       inputs:

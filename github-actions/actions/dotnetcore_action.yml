@@ -5,11 +5,11 @@ on:
       
 
 jobs:
-  initialisation:
+  initialization:
     runs-on: ubuntu-latest
     concurrency:
       group: ci-init-${{github.ref}}
       cancel-in-progress: true
-    uses: /jobs/initialisation.yml@master
+    uses: /jobs/initialization.yml@master
     with:
       versionIncrement: 

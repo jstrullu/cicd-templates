@@ -1,5 +1,5 @@
 parameters:
-  - name: fichierJson
+  - name: jsonFile
     type: string
   - name: releaseVersion
     type: string
@@ -8,18 +8,18 @@ parameters:
 
 steps:
   - task: shellexec@0
-    displayName: Création du fichier ${{ parameters.fichierJson }} s'il n'existe pas
+    displayName: Create file ${{ parameters.jsonFile }} if it does not exist
     inputs:
       code: |
-        test -f "$(Build.SourcesDirectory)/${{ parameters.fichierJson }}" || echo "{\"version\": \"0.0.0\"}" > "$(Build.SourcesDirectory)/${{ parameters.fichierJson }}"
-        git add ${{ parameters.fichierJson }}
+        test -f "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}" || echo "{\"version\": \"0.0.0\"}" > "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}"
+        git add ${{ parameters.jsonFile }}
 
   - task: JsonPatch@4
-    displayName: Mise à jour du fichier ${{ parameters.fichierJson }}
+    displayName: Update file ${{ parameters.jsonFile }}
     inputs:
       SyntaxType: 'slick'
       JsonWorkingDir: '$(Build.SourcesDirectory)'
-      JsonTargetFilters: '${{ parameters.fichierJson }}'
+      JsonTargetFilters: '${{ parameters.jsonFile }}'
       JsonPatchContent: '= /version => "${{ parameters.releaseVersion}}"'
       OutputPatchFile: true
       TreatErrors: 'ERROR'

@@ -69,7 +69,7 @@ jobs:
           mergeTestResults: true
           condition: succeededOrFailed()
       - task: SonarQubeAnalyze@5
-        displayName: 'Analyse sonar'
+        displayName: 'Sonar analysis'
         continueOnError: true
       - task: SonarQubePublish@5
         displayName: 'Publish sonar'

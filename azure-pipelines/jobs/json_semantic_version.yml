@@ -1,15 +1,15 @@
-#Prend en paramètre la variable versionIncrement et le fichier json à mettre à jour
-# ce job prend en charge le bump de version, le tag git et le nommage du pipeline dans azure devops
-# de plus la version semantic branche-major.minor.patch est persisté dans la variables DockerTag pour les étapes ultérieure
+# Takes the versionIncrement variable and the JSON file to update as parameters
+# This job handles version bumping, git tagging, and pipeline naming in Azure DevOps
+# Additionally, the semantic version branch-major.minor.patch is persisted in the DockerTag variable for subsequent stages
 parameters:
   - name: versionIncrement
     type: string
     default: patch
-  - name: fichierJson
+  - name: jsonFile
     type: string
 
 jobs:
-  - job: Versionning
+  - job: Versioning
     steps:
     - checkout: self
       clean: true
@@ -18,49 +18,49 @@ jobs:
       parameters:
         versionIncrement: ${{ parameters.versionIncrement }}      
     - task: shellexec@0
-      displayName: Création du fichier ${{ parameters.fichierJson }} s'il n'existe pas
+      displayName: Create file ${{ parameters.jsonFile }} if it does not exist
       inputs:
         code: |
-          test -f "$(Build.SourcesDirectory)/${{ parameters.fichierJson }}" || echo "{\"version\": \"0.0.0\"}" > "$(Build.SourcesDirectory)/${{ parameters.fichierJson }}"
-          git add ${{ parameters.fichierJson }}
+          test -f "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}" || echo "{\"version\": \"0.0.0\"}" > "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}"
+          git add ${{ parameters.jsonFile }}
     - task: LoadJsonVariables@2
-      displayName: Récupération de la version en cours
+      displayName: Load current version
       inputs:
-        JsonSource: ${{ parameters.fichierJson }}
+        JsonSource: ${{ parameters.jsonFile }}
         VariablePrefix: cicd
         MarkAsSecret: false    
     - task: Npm@1
-      displayName: Installation de semver
+      displayName: Install semver
       inputs:
         command: 'custom'
         customCommand: 'install semver -g'
     - task: CmdLine@1
-      displayName: Bump de la version
+      displayName: Bump version
       inputs:
         filename: sh
         arguments: -c "echo \"##vso[task.setvariable variable=releaseVersion;]`semver $(cicd_version) -i $(versionIncrement)`\"
     - task: CmdLine@1
-      displayName: Enregistrement de la version de l'artefact (branch-version)
+      displayName: Record artifact version (branch-version)
       inputs:
         filename: sh
         arguments: -c "echo \"##vso[task.setvariable variable=DockerTag;isOutput=true]`node -p '\"$(releaseVersion)\".toLowerCase()'`\"
       name: version
     
     - task: CmdLine@1
-      displayName: Mise à jour du nom du pipeline
+      displayName: Update pipeline name
       inputs:
         filename: sh
         arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
       condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     - task: CmdLine@1
-      displayName: Mise à jour du nom du pipeline PR
+      displayName: Update PR pipeline name
       inputs:
         filename: sh
         arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) PR $(System.PullRequest.PullRequestId).$(System.PullRequest.PullRequestIteration)"'
       condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
 
     - task: CmdLine@1
-      displayName: Sauvegarde de la version
+      displayName: Save version
       inputs:
         filename: sh
         arguments: -c "echo \"##vso[task.setvariable variable=Version;isOutput=true]$(releaseVersion)\"

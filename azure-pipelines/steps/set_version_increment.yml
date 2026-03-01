@@ -1,4 +1,4 @@
-#Prend en paramètre la variable versionIncrement
+# Takes the versionIncrement variable as parameter
 parameters:
   - name: versionIncrement
     type: string

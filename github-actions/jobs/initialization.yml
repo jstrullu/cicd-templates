@@ -1,9 +1,9 @@
-name: initialisation
+name: initialization
 
 on:
   workflow-dispatch:
     inputs:
       versionIncrement:
         required: true
-      fichierJson:
+      jsonFile:
         required: true

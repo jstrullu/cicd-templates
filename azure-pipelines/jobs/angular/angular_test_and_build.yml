@@ -3,7 +3,7 @@ parameters:
     type: string
   - name: projectVersion
     type: string
-  - name: fichierJson
+  - name: jsonFile
     type: string
 
 
