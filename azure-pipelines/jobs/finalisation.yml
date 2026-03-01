@@ -5,6 +5,9 @@ parameters:
     type: string
   - name: language
     type: string
+  - name: shouldTag
+    type: string
+    default: 'true'
 
 jobs:
   - job: Finalization
@@ -45,22 +48,19 @@ jobs:
           git config --global user.email "ci-service@example.com"
           git config --global user.name "CI Service"
         displayName: Set Git User
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
       - task: CmdLine@1
         displayName: Commit version
         inputs:
           filename: git
           arguments: 'commit -am "***NO_CI*** Set release version to ${{parameters.releaseVersion}}"'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
       - task: CmdLine@1
         displayName: Tag version
         inputs:
           filename: git
           arguments: 'tag -fa $(Build.SourceBranchName)-${{parameters.releaseVersion}} -m ${{parameters.releaseVersion}}'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq('${{ parameters.shouldTag }}', 'true'))
       - task: CmdLine@1
         displayName: Push commit and tag
         inputs:
           filename: git
           arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))

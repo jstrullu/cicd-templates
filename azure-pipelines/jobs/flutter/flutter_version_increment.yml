@@ -5,12 +5,23 @@ parameters:
   - name: pubspecFile
     type: string
     default: /**/pubspec.yaml
+  - name: gitFlowType
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
 
 jobs:
   - job: Versioning
     steps:
       - checkout: self
         persistCredentials: true
+      - template: ..\..\steps\resolve_gitflow_context.yml
+        parameters:
+          gitFlowType: ${{ parameters.gitFlowType }}
       - task: FlutterInstall@0
         displayName: 'Flutter Install'
         inputs:
@@ -48,25 +59,25 @@ jobs:
         inputs:
           filename: git
           arguments: 'commit -am "***NO_CI*** Set release version to $(releaseVersion)"'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
       - task: CmdLine@1
         displayName: 'Version tag'
         inputs:
           filename: git
           arguments: 'tag -fa $(Build.SourceBranchName)-$(releaseVersion) -m $(releaseVersion)'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldTag'], 'true'))
       - task: CmdLine@1
         displayName: 'Commit and tag push'
         inputs:
           filename: git
           arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
       - task: CmdLine@1
         displayName: 'Pipeline name update'
         inputs:
           filename: sh
           arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
       - task: CmdLine@1
         displayName: 'Pullrequest pipeline name update'
         inputs:

@@ -75,11 +75,73 @@ Most templates accept these common parameters:
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `versionIncrement` | Default bump level (`major`, `minor`, `patch`) | `patch` |
+| `gitFlowType` | Git branching strategy (see below) | `github-flow` |
 | `jsonFile` | Path to the version JSON file | `cicd.json` |
 | `sonarKey` | SonarQube project key | - |
 | `dockerRegistry` | Docker image repository name | - |
 | `containerRegistry` | Azure DevOps service connection for Docker | - |
 | `appName` | Application name (used for Kubernetes namespace) | `$(Build.Repository.Name)` |
+
+## Git Flow Strategies
+
+Set `gitFlowType` to choose how branches map to environments, versioning, and deployment:
+
+### `github-flow` (default)
+
+Simple flow: `main` + feature branches.
+
+| Branch | Build & Test | Deploy | Tag | Version suffix |
+|--------|:-----------:|:------:|:---:|:--------------:|
+| `main`/`master` | Yes | production | Yes | - |
+| Feature (PR) | Yes | - | - | - |
+
+### `trunk-based`
+
+Continuous deployment from a single main branch.
+
+| Branch | Build & Test | Deploy | Tag | Version suffix |
+|--------|:-----------:|:------:|:---:|:--------------:|
+| `main`/`master` | Yes | production | Yes | - |
+| Feature (PR) | Yes | - | - | - |
+
+### `gitflow`
+
+Structured promotion: `master` + `develop` + `release/*` + `hotfix/*`.
+
+| Branch | Build & Test | Deploy | Tag | Version suffix |
+|--------|:-----------:|:------:|:---:|:--------------:|
+| `main`/`master` | Yes | production | Yes | - |
+| `develop` | Yes | dev | - | `-SNAPSHOT` |
+| `release/*` | Yes | staging | Yes | `-rc` |
+| `hotfix/*` | Yes | staging | Yes | - |
+| Feature (PR) | Yes | - | - | - |
+
+### `gitlab-flow`
+
+Environment branches with promotion: `main` → `staging` → `production`.
+
+| Branch | Build & Test | Deploy | Tag | Version suffix |
+|--------|:-----------:|:------:|:---:|:--------------:|
+| `main`/`master` | Yes | dev | - | - |
+| `staging` | Yes | staging | - | - |
+| `production` | Yes | production | Yes | - |
+| Feature (PR) | Yes | - | - | - |
+
+### Usage Example
+
+```yaml
+stages:
+  - template: azure-pipelines/pipelines/java_gradle_pipeline.yml@templates
+    parameters:
+      gitFlowType: 'gitflow'
+      versionIncrement: 'patch'
+      sonarKey: 'my-project'
+      javaVersion: '17'
+      dockerRegistry: 'my-app'
+      containerRegistry: 'my-registry-connection'
+```
+
+The initialization stage resolves the git flow context and exposes output variables (`shouldDeploy`, `deployEnvironment`, `shouldTag`, `shouldFinalize`, `versionSuffix`) that downstream stages use to decide what to run.
 
 ## Service Connections
 

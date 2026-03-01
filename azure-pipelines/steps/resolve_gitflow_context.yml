@@ -1,0 +1,132 @@
+# Resolves the git flow context based on the selected strategy and current branch.
+# Outputs variables that downstream stages use to decide what to deploy, tag, and finalize.
+#
+# Supported strategies:
+#   github-flow  — main + feature branches, deploy on merge to main
+#   trunk-based  — same as github-flow, continuous deployment from main
+#   gitflow      — master + develop + release/* + hotfix/* with staged promotion
+#   gitlab-flow  — main + environment branches (staging, production)
+#
+# Output variables (all isOutput=true, step name: gitflow):
+#   shouldDeploy      — "true" if this branch should trigger deployment
+#   deployEnvironment — target environment: dev, staging, or production
+#   shouldTag         — "true" if a git tag should be created
+#   shouldFinalize    — "true" if version commit + push should happen
+#   versionSuffix     — suffix appended to version for pre-releases (e.g. -SNAPSHOT, -rc)
+
+parameters:
+  - name: gitFlowType
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
+
+steps:
+  - bash: |
+      BRANCH_NAME="$(Build.SourceBranchName)"
+      FULL_BRANCH="$(Build.SourceBranch)"
+      BUILD_REASON="$(Build.Reason)"
+      GIT_FLOW_TYPE="${{ parameters.gitFlowType }}"
+
+      SHOULD_DEPLOY="false"
+      DEPLOY_ENV=""
+      SHOULD_TAG="false"
+      SHOULD_FINALIZE="false"
+      VERSION_SUFFIX=""
+
+      IS_PR="false"
+      if [ "$BUILD_REASON" = "PullRequest" ]; then
+        IS_PR="true"
+      fi
+
+      IS_MAIN="false"
+      if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
+        IS_MAIN="true"
+      fi
+
+      case "$GIT_FLOW_TYPE" in
+
+        github-flow)
+          if [ "$IS_PR" = "false" ] && [ "$IS_MAIN" = "true" ]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="production"
+            SHOULD_TAG="true"
+            SHOULD_FINALIZE="true"
+          fi
+          ;;
+
+        trunk-based)
+          if [ "$IS_PR" = "false" ] && [ "$IS_MAIN" = "true" ]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="production"
+            SHOULD_TAG="true"
+            SHOULD_FINALIZE="true"
+          fi
+          ;;
+
+        gitflow)
+          if [ "$IS_PR" = "true" ]; then
+            : # build and test only
+          elif [ "$IS_MAIN" = "true" ]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="production"
+            SHOULD_TAG="true"
+            SHOULD_FINALIZE="true"
+          elif [ "$BRANCH_NAME" = "develop" ]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="dev"
+            SHOULD_FINALIZE="true"
+            VERSION_SUFFIX="-SNAPSHOT"
+          elif echo "$FULL_BRANCH" | grep -q "^refs/heads/release/"; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="staging"
+            SHOULD_TAG="true"
+            SHOULD_FINALIZE="true"
+            VERSION_SUFFIX="-rc"
+          elif echo "$FULL_BRANCH" | grep -q "^refs/heads/hotfix/"; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="staging"
+            SHOULD_TAG="true"
+            SHOULD_FINALIZE="true"
+          fi
+          ;;
+
+        gitlab-flow)
+          if [ "$IS_PR" = "true" ]; then
+            : # build and test only
+          elif [ "$IS_MAIN" = "true" ]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="dev"
+            SHOULD_FINALIZE="true"
+          elif [ "$BRANCH_NAME" = "staging" ] || [ "$BRANCH_NAME" = "pre-production" ]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="staging"
+          elif [ "$BRANCH_NAME" = "production" ]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_ENV="production"
+            SHOULD_TAG="true"
+          fi
+          ;;
+
+      esac
+
+      echo "=== Git Flow Context ==="
+      echo "Strategy:     $GIT_FLOW_TYPE"
+      echo "Branch:       $BRANCH_NAME ($FULL_BRANCH)"
+      echo "Is PR:        $IS_PR"
+      echo "shouldDeploy: $SHOULD_DEPLOY"
+      echo "deployEnv:    $DEPLOY_ENV"
+      echo "shouldTag:    $SHOULD_TAG"
+      echo "shouldFinalize: $SHOULD_FINALIZE"
+      echo "versionSuffix:  $VERSION_SUFFIX"
+
+      echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]$SHOULD_DEPLOY"
+      echo "##vso[task.setvariable variable=deployEnvironment;isOutput=true]$DEPLOY_ENV"
+      echo "##vso[task.setvariable variable=shouldTag;isOutput=true]$SHOULD_TAG"
+      echo "##vso[task.setvariable variable=shouldFinalize;isOutput=true]$SHOULD_FINALIZE"
+      echo "##vso[task.setvariable variable=versionSuffix;isOutput=true]$VERSION_SUFFIX"
+    name: gitflow
+    displayName: 'Resolve git flow context (${{ parameters.gitFlowType }})'

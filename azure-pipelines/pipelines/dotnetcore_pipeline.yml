@@ -5,6 +5,15 @@ parameters:
   - name: versionIncrement
     type: string
     default: 'patch'
+  - name: gitFlowType
+    displayName: Git flow strategy
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
   - name: sonarKey
     type: string
   - name: securityTargetDir
@@ -15,14 +24,14 @@ parameters:
     type: string
 
 stages:
-  #Initialization
   - stage: Initialization
     jobs:
       - template: /jobs/json_semantic_version.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           jsonFile: ${{ parameters.jsonFile }}
-          
+          gitFlowType: ${{ parameters.gitFlowType }}
+
   - stage: BuildAndTest
     displayName: 'Build Test and Sonar'
     dependsOn: Initialization
@@ -34,17 +43,20 @@ stages:
           sonarProjectKey: ${{parameters.sonarKey}}
           projectFile: ${{ parameters.projectFile }}
           projectVersion: $(version)
-  
+
   - stage: Finalization
     displayName: 'Finalization'
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
     dependsOn:
       - Initialization
       - BuildAndTest
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
     jobs:
       - template: /jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
           language: '.net'
+          shouldTag: $(shouldTag)

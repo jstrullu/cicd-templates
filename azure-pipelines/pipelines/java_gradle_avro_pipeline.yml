@@ -12,6 +12,15 @@ parameters:
   - name: versionIncrement
     type: string
     default: 'patch'
+  - name: gitFlowType
+    displayName: Git flow strategy
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
   - name: gradlePath
     type: string
   - name: javaVersion
@@ -24,6 +33,7 @@ stages:
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           jsonFile: ${{ parameters.jsonFile }}
+          gitFlowType: ${{ parameters.gitFlowType }}
   - stage: Build
     dependsOn: Initialization
     variables:
@@ -35,7 +45,7 @@ stages:
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
   - stage: Publish_Artifact
-    dependsOn: 
+    dependsOn:
       - Initialization
       - Build
     variables:
@@ -48,15 +58,17 @@ stages:
           jsonFile: ${{ parameters.jsonFile }}
 
   - stage: Finalization
-    condition: ne(variables['Build.Reason'], 'PullRequest')
-    dependsOn: 
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
       - Initialization
       - Build
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
     jobs:
       - template: /jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
           language: 'java'
+          shouldTag: $(shouldTag)

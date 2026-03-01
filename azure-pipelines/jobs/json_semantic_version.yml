@@ -1,12 +1,27 @@
 # Takes the versionIncrement variable and the JSON file to update as parameters
 # This job handles version bumping, git tagging, and pipeline naming in Azure DevOps
 # Additionally, the semantic version branch-major.minor.patch is persisted in the DockerTag variable for subsequent stages
+#
+# Git flow context outputs (from the gitflow step):
+#   Versioning.gitflow.shouldDeploy      — "true" if this branch should trigger deployment
+#   Versioning.gitflow.deployEnvironment — target environment: dev, staging, or production
+#   Versioning.gitflow.shouldTag         — "true" if a git tag should be created
+#   Versioning.gitflow.shouldFinalize    — "true" if version commit + push should happen
+#   Versioning.gitflow.versionSuffix     — suffix for pre-releases (e.g. -SNAPSHOT, -rc)
 parameters:
   - name: versionIncrement
     type: string
     default: patch
   - name: jsonFile
     type: string
+  - name: gitFlowType
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
 
 jobs:
   - job: Versioning
@@ -14,9 +29,12 @@ jobs:
     - checkout: self
       clean: true
       persistCredentials: true
+    - template: ..\steps\resolve_gitflow_context.yml
+      parameters:
+        gitFlowType: ${{ parameters.gitFlowType }}
     - template: ..\steps\set_version_increment.yml
       parameters:
-        versionIncrement: ${{ parameters.versionIncrement }}      
+        versionIncrement: ${{ parameters.versionIncrement }}
     - task: shellexec@0
       displayName: Create file ${{ parameters.jsonFile }} if it does not exist
       inputs:
@@ -39,12 +57,17 @@ jobs:
       inputs:
         filename: sh
         arguments: -c "echo \"##vso[task.setvariable variable=releaseVersion;]`semver $(cicd_version) -i $(versionIncrement)`\"
-    - task: CmdLine@1
-      displayName: Record artifact version (branch-version)
-      inputs:
-        filename: sh
-        arguments: -c "echo \"##vso[task.setvariable variable=DockerTag;isOutput=true]`node -p '\"$(releaseVersion)\".toLowerCase()'`\"
+    - bash: |
+        VERSION="$(releaseVersion)"
+        SUFFIX="$(gitflow.versionSuffix)"
+        if [ -n "$SUFFIX" ]; then
+          FULL_VERSION="${VERSION}${SUFFIX}"
+        else
+          FULL_VERSION="${VERSION}"
+        fi
+        echo "##vso[task.setvariable variable=DockerTag;isOutput=true]$(echo "$FULL_VERSION" | tr '[:upper:]' '[:lower:]')"
       name: version
+      displayName: 'Record artifact version'
     
     - task: CmdLine@1
       displayName: Update pipeline name

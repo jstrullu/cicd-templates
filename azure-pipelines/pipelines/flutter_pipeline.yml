@@ -5,36 +5,45 @@ parameters:
   - name: versionIncrement
     type: string
     default: 'patch'
+  - name: gitFlowType
+    displayName: Git flow strategy
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
   - name: sonarKey
     type: string
 
 stages:
-  #Initialization
   - stage: Initialization
     displayName: 'Initialization and versioning'
     jobs:
       - template: /azure-pipelines/jobs/flutter/flutter_version_increment.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
+          gitFlowType: ${{ parameters.gitFlowType }}
 
   - stage: DeployDev
     displayName: 'Deploy to Firebase Dev'
     dependsOn: Initialization
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     jobs:
       - template: /azure-pipelines/jobs/flutter/flutter_build_firebase_deploy.yml
         parameters:
           sonarKey: ${{parameters.sonarKey}}
           environment: 'dev'
           firebaseToken: $(FIREBASE_TOKEN_DEV)
-    condition: eq(variables['Build.SourceBranchName'], 'master')
 
   - stage: DeployProd
     displayName: 'Deploy to Firebase Prod'
     dependsOn: DeployDev
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.deployEnvironment'], 'production'))
     jobs:
       - template: /azure-pipelines/jobs/flutter/flutter_build_firebase_deploy.yml
         parameters:
           sonarKey: ${{parameters.sonarKey}}
           environment: 'prod'
           firebaseToken: $(FIREBASE_TOKEN_PROD)
-    condition: eq(variables['Build.SourceBranchName'], 'master')
