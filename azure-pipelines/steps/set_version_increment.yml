@@ -2,6 +2,9 @@
 parameters:
   - name: versionIncrement
     type: string
+  - name: reposConnection
+    type: string
+    default: Repos
 
 steps:
   - script: |
@@ -10,7 +13,7 @@ steps:
     displayName: 'Getting pullrequest with API'
     continueOnError: true
     inputs:
-      webserviceEndpoint: 'Repos'
+      webserviceEndpoint: '${{ parameters.reposConnection }}'
       relativeUrl: '$(System.TeamProject)/_apis/git/repositories/$(Build.Repository.Name)/pullrequestquery?api-version=3.0'
       httpVerb: 'POST'
       body: |

@@ -42,8 +42,8 @@ jobs:
         condition: eq('${{parameters.language}}', '.net')
       
       - bash: |
-          git config --global user.email "service@slhtech.fr"
-          git config --global user.name "Service"
+          git config --global user.email "ci-service@example.com"
+          git config --global user.name "CI Service"
         displayName: Set Git User
         condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
       - task: CmdLine@1

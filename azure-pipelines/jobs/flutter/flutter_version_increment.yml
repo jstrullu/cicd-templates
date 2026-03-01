@@ -40,8 +40,8 @@ jobs:
         displayName: 'Version bump'
 
       - bash: |
-          git config --global user.email "technique@kuenta.fr"
-          git config --global user.name "Service Technique"
+          git config --global user.email "ci-service@example.com"
+          git config --global user.name "CI Service"
         displayName: 'Set Git User'
       - task: CmdLine@1
         displayName: 'Version commit'

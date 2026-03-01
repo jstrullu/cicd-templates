@@ -16,6 +16,8 @@ parameters:
     type: string
   - name: dockerRegistry
     type: string
+  - name: containerRegistry
+    type: string
 
 stages:
   - stage: Initialization
@@ -59,6 +61,7 @@ stages:
       - template: /jobs/docker_build_and_publish.yml
         parameters:
           registry: ${{ parameters.dockerRegistry }}
+          containerRegistry: ${{ parameters.containerRegistry }}
           projectVersion: $(version)
   
   - stage: Finalization
@@ -90,5 +93,5 @@ stages:
       - template: /jobs/kube_deploy.yml
         parameters:
           env: "Dev"
-          resource: "tracker-immo"
-          namespace: "tracker-immo"
+          resource: ${{ parameters.appName }}
+          namespace: ${{ parameters.appName }}

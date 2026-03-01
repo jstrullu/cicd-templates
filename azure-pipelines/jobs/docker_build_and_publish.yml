@@ -3,6 +3,11 @@ parameters:
     type: string
   - name: projectVersion
     type: string
+  - name: containerRegistry
+    type: string
+  - name: insecureRegistryUrl
+    type: string
+    default: ''
 
 jobs:
   - job: build_image
@@ -10,13 +15,14 @@ jobs:
       - download: current
         artifact: drop
       - bash: cp -rf $(Pipeline.Workspace)/drop/* ./
-      - script: |
-          echo '{  "insecure-registries" : ["http://141.94.98.187:5000"]}' | sudo tee /etc/docker/daemon.json
-          sudo service docker restart
+      - ${{ if ne(parameters.insecureRegistryUrl, '') }}:
+        - script: |
+            echo '{  "insecure-registries" : ["${{ parameters.insecureRegistryUrl }}"]}' | sudo tee /etc/docker/daemon.json
+            sudo service docker restart
 
       - task: Docker@2
         inputs:
-          containerRegistry: 'minikube'
+          containerRegistry: '${{ parameters.containerRegistry }}'
           repository: '${{parameters.registry}}'
           command: 'buildAndPush'
           Dockerfile: '$(Pipeline.Workspace)/drop/Dockerfile'

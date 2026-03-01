@@ -7,6 +7,9 @@ parameters:
     type: string
   - name: jsonFile
     type: string
+  - name: sonarConnection
+    type: string
+    default: Sonar
 
 jobs:
   - job: Build_Test
@@ -22,7 +25,7 @@ jobs:
     - ${{ if ne(parameters.sonarKey, ' ') }}:
       - task: SonarQubePrepare@5
         inputs:
-          SonarQube: 'sonar'
+          SonarQube: '${{ parameters.sonarConnection }}'
           scannerMode: 'Other'
           extraProperties: |
             sonar.projectKey=${{ parameters.sonarKey }}
