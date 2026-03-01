@@ -11,23 +11,23 @@ parameters:
     type: string
   - name: projectFile
     type: string
-  - name: fichierJson
+  - name: jsonFile
     type: string
 
 stages:
-  #Initialisation
-  - stage: Initialisation
+  #Initialization
+  - stage: Initialization
     jobs:
       - template: /jobs/json_semantic_version.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
           
   - stage: BuildAndTest
     displayName: 'Build Test and Sonar'
-    dependsOn: Initialisation
+    dependsOn: Initialization
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/dotnetcore/dotnetcore_build_test.yml
         parameters:
@@ -35,16 +35,16 @@ stages:
           projectFile: ${{ parameters.projectFile }}
           projectVersion: $(version)
   
-  - stage: Finalisation
-    displayName: 'Finalisation'
+  - stage: Finalization
+    displayName: 'Finalization'
     dependsOn:
-      - Initialisation
+      - Initialization
       - BuildAndTest
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
           language: '.net'

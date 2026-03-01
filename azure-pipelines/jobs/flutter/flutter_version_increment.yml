@@ -2,12 +2,12 @@ parameters:
   - name: versionIncrement
     type: string
     default: patch
-  - name: fichierPubspec
+  - name: pubspecFile
     type: string
     default: /**/pubspec.yaml
 
 jobs:
-  - job: Versionning
+  - job: Versioning
     steps:
       - checkout: self
         persistCredentials: true

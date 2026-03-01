@@ -8,7 +8,7 @@
 
 jobs:
   - deployment:
-    displayName: Deploiement ${{ parameters.environment }}
+    displayName: Deployment ${{ parameters.environment }}
     environment: ${{ parameters.environment }}
     strategy:
       runOnce:
@@ -17,12 +17,12 @@ jobs:
             - checkout: self
               persistCredentials: true
             - task: FlutterInstall@0
-              displayName: 'Installation Flutter'
+              displayName: 'Install Flutter'
               inputs:
                 mode: 'auto'
                 channel: 'stable'
             - task: shellexec@0
-              displayName: 'Installation Dart'
+              displayName: 'Install Dart'
               inputs:
                 code: |
                   sudo wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O - | sudo apt-key add -
@@ -101,7 +101,7 @@ jobs:
                 #    generateCodeCoverageReport: true
 
             - task: SonarQubeAnalyze@5
-              displayName: 'Sonar analyse'
+              displayName: 'Sonar analysis'
 
             - task: SonarQubePublish@5
               displayName: 'Sonar publish'

@@ -3,10 +3,10 @@ trigger:
 
 parameters:
   - name: appName
-    displayName: Nom de l'application
+    displayName: Application name
     type: string
     default: $(Build.Repository.Name)
-  - name: fichierJson
+  - name: jsonFile
     type: string
     default: cicd.json
   - name: versionIncrement
@@ -18,45 +18,45 @@ parameters:
     type: string
 
 stages:
-  - stage: Initialisation
+  - stage: Initialization
     jobs:
       - template: /jobs/json_semantic_version.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
   - stage: Build
-    dependsOn: Initialisation
+    dependsOn: Initialization
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/java/java_gradle_avro_build.yml
         parameters:
           javaVersion: ${{ parameters.javaVersion }}
           projectVersion: $(version)
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
   - stage: Publish_Artifact
     dependsOn: 
-      - Initialisation
+      - Initialization
       - Build
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/java/gradle_package_publish.yml
         parameters:
           javaVersion: ${{ parameters.javaVersion }}
           projectVersion: $(version)
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
 
-  - stage: Finalisation
+  - stage: Finalization
     condition: ne(variables['Build.Reason'], 'PullRequest')
     dependsOn: 
-      - Initialisation
+      - Initialization
       - Build
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
           language: 'java'

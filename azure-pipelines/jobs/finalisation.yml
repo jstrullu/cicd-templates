@@ -1,20 +1,20 @@
 parameters:
   - name: releaseVersion
     type: string
-  - name: fichierJson
+  - name: jsonFile
     type: string
   - name: language
     type: string
 
 jobs:
-  - job: Finalisation
+  - job: Finalization
     steps:
       - checkout: self
         clean: true
         persistCredentials: true
       - template: ..\steps\set_version_file.yml
         parameters:
-          fichierJson: ${{parameters.fichierJson}}
+          jsonFile: ${{parameters.jsonFile}}
           releaseVersion: ${{parameters.releaseVersion}}
       
       - task: NodeTool@0
@@ -26,7 +26,7 @@ jobs:
       - script: |
           npm ci
           npm version ${{ parameters.releaseVersion }} --no-git-tag-version
-        displayName: 'Update de version'
+        displayName: 'Update version'
         condition: eq('${{parameters.language}}', 'angular')
 
       - task: PowerShell@2
@@ -47,19 +47,19 @@ jobs:
         displayName: Set Git User
         condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
       - task: CmdLine@1
-        displayName: Commit de la version
+        displayName: Commit version
         inputs:
           filename: git
           arguments: 'commit -am "***NO_CI*** Set release version to ${{parameters.releaseVersion}}"'
         condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
       - task: CmdLine@1
-        displayName: Tag de la version
+        displayName: Tag version
         inputs:
           filename: git
           arguments: 'tag -fa $(Build.SourceBranchName)-${{parameters.releaseVersion}} -m ${{parameters.releaseVersion}}'
         condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
       - task: CmdLine@1
-        displayName: Push du commit et du tag
+        displayName: Push commit and tag
         inputs:
           filename: git
           arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'

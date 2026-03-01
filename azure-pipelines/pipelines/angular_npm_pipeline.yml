@@ -3,10 +3,10 @@ trigger:
 
 parameters:
   - name: appName
-    displayName: Nom de l'application
+    displayName: Application name
     type: string
     default: $(Build.Repository.Name)
-  - name: fichierJson
+  - name: jsonFile
     type: string
     default: cicd.json
   - name: versionIncrement
@@ -18,30 +18,30 @@ parameters:
     type: string
 
 stages:
-  - stage: Initialisation
+  - stage: Initialization
     jobs:
       - template: /jobs/json_semantic_version.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
   
   - stage: Build_And_Test
-    dependsOn: Initialisation
+    dependsOn: Initialization
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/angular/angular_test_and_build.yml
         parameters:
           sonarKey: ${{ parameters.sonarKey }}
           projectVersion: $(version)
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
 
   - stage: Lint
     dependsOn:
-      - Initialisation
+      - Initialization
       - Build_And_Test
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/angular/angular_linter.yml
         parameters:
@@ -50,9 +50,9 @@ stages:
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     dependsOn: 
-      - Initialisation
+      - Initialization
       - Build_And_Test
       - Lint
     jobs:
@@ -61,31 +61,31 @@ stages:
           registry: ${{ parameters.dockerRegistry }}
           projectVersion: $(version)
   
-  - stage: Finalisation
+  - stage: Finalization
     condition: ne(variables['Build.Reason'], 'PullRequest')
     dependsOn: 
-      - Initialisation
+      - Initialization
       - Build_And_Test
       - Lint
       - Docker_Build_And_Publish
     variables:
-      version: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
-          fichierJson: ${{ parameters.fichierJson }}
+          jsonFile: ${{ parameters.jsonFile }}
           language: 'angular'
   
   - stage: Deploy_To_Dev
     condition: ne(variables['Build.Reason'], 'PullRequest')
     dependsOn: 
-      - Initialisation
+      - Initialization
       - Build_And_Test
       - Lint
       - Docker_Build_And_Publish
     variables:
-      BUILDID: $[stageDependencies.Initialisation.Versionning.outputs['version.DockerTag']]
+      BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
       - template: /jobs/kube_deploy.yml
         parameters:

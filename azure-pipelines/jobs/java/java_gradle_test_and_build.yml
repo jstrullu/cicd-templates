@@ -5,7 +5,7 @@ parameters:
     type: string
   - name: projectVersion
     type: string
-  - name: fichierJson
+  - name: jsonFile
     type: string
 
 jobs:
@@ -16,7 +16,7 @@ jobs:
       persistCredentials: true
     - template: ..\..\steps\set_version_file.yml
       parameters:
-        fichierJson: ${{parameters.fichierJson}}
+        jsonFile: ${{parameters.jsonFile}}
         releaseVersion: ${{parameters.projectVersion}}
     - bash: echo ${{parameters.sonarKey}}
     - ${{ if ne(parameters.sonarKey, ' ') }}:
