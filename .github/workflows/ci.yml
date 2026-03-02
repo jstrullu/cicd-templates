@@ -17,22 +17,7 @@ jobs:
         run: pip install yamllint
 
       - name: Preprocess and lint YAML files
-        run: |
-          exit_code=0
-          for file in $(find azure-pipelines -name '*.yml'); do
-            # Replace Azure Pipelines template expressions with placeholders
-            # so yamllint can parse the file without false-positive errors.
-            sed \
-              -e 's/\${{[^}]*}}/PLACEHOLDER/g' \
-              -e 's/\$\[[^]]*\]/PLACEHOLDER/g' \
-              "$file" > /tmp/lint_target.yml
-
-            if ! yamllint -c .yamllint.yml /tmp/lint_target.yml; then
-              echo "::error file=$file::yamllint failed"
-              exit_code=1
-            fi
-          done
-          exit $exit_code
+        run: bash scripts/lint_yaml.sh
 
   validate-templates:
     name: Validate template conventions
