@@ -84,24 +84,6 @@ stages:
           containerRegistry: ${{ parameters.containerRegistry }}
           projectVersion: $(version)
 
-  - stage: Finalization
-    displayName: 'Finalization'
-    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
-    dependsOn:
-      - Initialization
-      - BuildAndTest
-      - Docker_Build_And_Publish
-    variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
-    jobs:
-      - template: /jobs/finalisation.yml
-        parameters:
-          releaseVersion: $(version)
-          jsonFile: ${{ parameters.jsonFile }}
-          language: '.net'
-          shouldTag: $(shouldTag)
-
   - stage: Deploy
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     dependsOn:
@@ -117,3 +99,22 @@ stages:
           env: $(deployEnv)
           resource: ${{ parameters.appName }}
           namespace: ${{ parameters.appName }}
+
+  - stage: Finalization
+    displayName: 'Finalization'
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
+      - Initialization
+      - BuildAndTest
+      - Docker_Build_And_Publish
+      - Deploy
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+          language: '.net'
+          shouldTag: $(shouldTag)
