@@ -1,0 +1,118 @@
+parameters:
+  - name: sonarKey
+    type: string
+    default: ''
+  - name: nodeVersion
+    type: string
+    default: '20.x'
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+  - name: sonarConnection
+    type: string
+    default: Sonar
+  - name: packageManager
+    type: string
+    default: npm
+    values:
+      - npm
+      - yarn
+  - name: buildScript
+    type: string
+    default: build
+  - name: testScript
+    type: string
+    default: test
+
+jobs:
+  - job: Build_Test
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: NodeTool@0
+      displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
+      inputs:
+        versionSpec: '${{ parameters.nodeVersion }}'
+
+    - script: npm ci
+      displayName: 'Install dependencies (npm)'
+      condition: eq('${{ parameters.packageManager }}', 'npm')
+
+    - script: yarn install --frozen-lockfile
+      displayName: 'Install dependencies (yarn)'
+      condition: eq('${{ parameters.packageManager }}', 'yarn')
+
+    - script: |
+        npm version ${{ parameters.projectVersion }} --no-git-tag-version
+      displayName: 'Set package version'
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubePrepare@5
+        displayName: 'Prepare Sonar'
+        inputs:
+          SonarQube: '${{ parameters.sonarConnection }}'
+          scannerMode: 'CLI'
+          configMode: 'manual'
+          cliProjectKey: ${{ parameters.sonarKey }}
+          cliSources: 'src'
+          cliProjectName: $(Build.Repository.Name)
+          extraProperties: |
+            sonar.javascript.lcov.reportPaths=coverage/lcov.info
+            sonar.projectVersion=${{ parameters.projectVersion }}
+
+    - script: npm run ${{ parameters.buildScript }}
+      displayName: 'Build (npm)'
+      condition: eq('${{ parameters.packageManager }}', 'npm')
+
+    - script: yarn ${{ parameters.buildScript }}
+      displayName: 'Build (yarn)'
+      condition: eq('${{ parameters.packageManager }}', 'yarn')
+
+    - script: npm run ${{ parameters.testScript }} -- --ci --coverage --reporters=default --reporters=jest-junit
+      displayName: 'Run tests (npm)'
+      condition: eq('${{ parameters.packageManager }}', 'npm')
+      env:
+        JEST_JUNIT_OUTPUT_DIR: $(Build.SourcesDirectory)/test-results
+
+    - script: yarn ${{ parameters.testScript }} --ci --coverage --reporters=default --reporters=jest-junit
+      displayName: 'Run tests (yarn)'
+      condition: eq('${{ parameters.packageManager }}', 'yarn')
+      env:
+        JEST_JUNIT_OUTPUT_DIR: $(Build.SourcesDirectory)/test-results
+
+    - task: PublishTestResults@2
+      displayName: 'Publish Test Results'
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results/junit.xml'
+        testRunTitle: 'Node.js Unit Tests'
+        mergeTestResults: true
+      condition: succeededOrFailed()
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish code coverage'
+      inputs:
+        codeCoverageTool: Cobertura
+        summaryFileLocation: '**/coverage/cobertura-coverage.xml'
+        reportDirectory: './coverage'
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubeAnalyze@5
+        displayName: 'Sonar analysis'
+      - task: SonarQubePublish@5
+        displayName: 'Sonar publish'
+        inputs:
+          pollingTimeoutSec: '300'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)'
+        artifact: 'drop'
+        publishLocation: 'pipeline'

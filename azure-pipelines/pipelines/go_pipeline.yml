@@ -33,9 +33,17 @@ parameters:
     displayName: Version increment for hotfix branches (gitflow)
     type: string
     default: patch
+  - name: goVersion
+    displayName: Go version
+    type: string
+    default: '1.22'
   - name: sonarKey
     type: string
     default: ''
+  - name: buildFlags
+    displayName: Go build target
+    type: string
+    default: './...'
   - name: dockerRegistry
     type: string
   - name: containerRegistry
@@ -58,22 +66,13 @@ stages:
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
-      - template: /jobs/angular/angular_test_and_build.yml
+      - template: /jobs/go/go_build_test.yml
         parameters:
           sonarKey: ${{ parameters.sonarKey }}
+          goVersion: ${{ parameters.goVersion }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
-
-  - stage: Lint
-    dependsOn:
-      - Initialization
-      - Build_And_Test
-    variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-    jobs:
-      - template: /jobs/angular/angular_linter.yml
-        parameters:
-          projectVersion: $(version)
+          buildFlags: ${{ parameters.buildFlags }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
@@ -82,7 +81,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
     jobs:
       - template: /jobs/docker_build_and_publish.yml
         parameters:
@@ -95,7 +93,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
       - Docker_Build_And_Publish
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
@@ -105,7 +102,7 @@ stages:
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
-          language: 'angular'
+          language: 'go'
           shouldTag: $(shouldTag)
 
   - stage: Deploy
@@ -113,7 +110,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
       - Docker_Build_And_Publish
     variables:
       BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]

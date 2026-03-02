@@ -28,6 +28,7 @@ parameters:
     default: patch
   - name: sonarKey
     type: string
+    default: ''
 
 stages:
   - stage: Initialization

@@ -1,0 +1,83 @@
+parameters:
+  - name: sonarKey
+    type: string
+    default: ''
+  - name: javaVersion
+    type: string
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+  - name: sonarConnection
+    type: string
+    default: Sonar
+  - name: mavenGoals
+    type: string
+    default: 'clean verify'
+  - name: mavenOptions
+    type: string
+    default: '-B -ntp'
+  - name: pomFile
+    type: string
+    default: 'pom.xml'
+
+jobs:
+  - job: Build_Test
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: ${{ parameters.javaVersion }}
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    - task: Maven@4
+      displayName: 'Set POM version'
+      inputs:
+        mavenPomFile: '${{ parameters.pomFile }}'
+        goals: 'versions:set'
+        options: '${{ parameters.mavenOptions }} -DnewVersion=${{ parameters.projectVersion }} -DgenerateBackupPoms=false'
+        javaHomeOption: 'JDKVersion'
+        publishJUnitResults: false
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubePrepare@5
+        displayName: 'Prepare Sonar'
+        inputs:
+          SonarQube: '${{ parameters.sonarConnection }}'
+          scannerMode: 'Other'
+          extraProperties: |
+            sonar.projectKey=${{ parameters.sonarKey }}
+
+    - task: Maven@4
+      displayName: 'Build and Test'
+      inputs:
+        mavenPomFile: '${{ parameters.pomFile }}'
+        goals: '${{ parameters.mavenGoals }}'
+        options: '${{ parameters.mavenOptions }}'
+        javaHomeOption: 'JDKVersion'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        codeCoverageToolOption: 'JaCoCo'
+        codeCoverageClassFilesDirectories: 'target/classes'
+        ${{ if ne(parameters.sonarKey, '') }}:
+          sonarQubeRunAnalysis: true
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubePublish@5
+        displayName: 'Sonar publish'
+        inputs:
+          pollingTimeoutSec: '300'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)'
+        artifact: 'drop'
+        publishLocation: 'pipeline'

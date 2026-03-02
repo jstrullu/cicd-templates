@@ -37,6 +37,7 @@ parameters:
     type: string
   - name: sonarKey
     type: string
+    default: ''
   - name: javaVersion
     type: string
   - name: dockerRegistry

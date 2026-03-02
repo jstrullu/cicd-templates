@@ -33,9 +33,21 @@ parameters:
     displayName: Version increment for hotfix branches (gitflow)
     type: string
     default: patch
+  - name: pythonVersion
+    displayName: Python version
+    type: string
+    default: '3.12'
   - name: sonarKey
     type: string
     default: ''
+  - name: requirementsFile
+    displayName: Path to requirements file
+    type: string
+    default: requirements.txt
+  - name: testDirectory
+    displayName: Test directory
+    type: string
+    default: tests
   - name: dockerRegistry
     type: string
   - name: containerRegistry
@@ -58,22 +70,14 @@ stages:
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
-      - template: /jobs/angular/angular_test_and_build.yml
+      - template: /jobs/python/python_build_test.yml
         parameters:
           sonarKey: ${{ parameters.sonarKey }}
+          pythonVersion: ${{ parameters.pythonVersion }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
-
-  - stage: Lint
-    dependsOn:
-      - Initialization
-      - Build_And_Test
-    variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-    jobs:
-      - template: /jobs/angular/angular_linter.yml
-        parameters:
-          projectVersion: $(version)
+          requirementsFile: ${{ parameters.requirementsFile }}
+          testDirectory: ${{ parameters.testDirectory }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
@@ -82,7 +86,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
     jobs:
       - template: /jobs/docker_build_and_publish.yml
         parameters:
@@ -95,7 +98,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
       - Docker_Build_And_Publish
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
@@ -105,7 +107,7 @@ stages:
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
-          language: 'angular'
+          language: 'python'
           shouldTag: $(shouldTag)
 
   - stage: Deploy
@@ -113,7 +115,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
       - Docker_Build_And_Publish
     variables:
       BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]

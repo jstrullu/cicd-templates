@@ -33,9 +33,20 @@ parameters:
     displayName: Version increment for hotfix branches (gitflow)
     type: string
     default: patch
+  - name: javaVersion
+    displayName: Java version
+    type: string
   - name: sonarKey
     type: string
     default: ''
+  - name: mavenGoals
+    displayName: Maven goals
+    type: string
+    default: 'clean verify'
+  - name: pomFile
+    displayName: Path to POM file
+    type: string
+    default: 'pom.xml'
   - name: dockerRegistry
     type: string
   - name: containerRegistry
@@ -58,22 +69,14 @@ stages:
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
-      - template: /jobs/angular/angular_test_and_build.yml
+      - template: /jobs/java/java_maven_test_and_build.yml
         parameters:
           sonarKey: ${{ parameters.sonarKey }}
+          javaVersion: ${{ parameters.javaVersion }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
-
-  - stage: Lint
-    dependsOn:
-      - Initialization
-      - Build_And_Test
-    variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-    jobs:
-      - template: /jobs/angular/angular_linter.yml
-        parameters:
-          projectVersion: $(version)
+          mavenGoals: ${{ parameters.mavenGoals }}
+          pomFile: ${{ parameters.pomFile }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
@@ -82,7 +85,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
     jobs:
       - template: /jobs/docker_build_and_publish.yml
         parameters:
@@ -95,7 +97,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
       - Docker_Build_And_Publish
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
@@ -105,7 +106,7 @@ stages:
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
-          language: 'angular'
+          language: 'maven'
           shouldTag: $(shouldTag)
 
   - stage: Deploy
@@ -113,7 +114,6 @@ stages:
     dependsOn:
       - Initialization
       - Build_And_Test
-      - Lint
       - Docker_Build_And_Publish
     variables:
       BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]

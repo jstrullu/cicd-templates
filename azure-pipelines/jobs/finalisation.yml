@@ -22,15 +22,15 @@ jobs:
       
       - task: NodeTool@0
         inputs:
-          versionSpec: '18.x'
+          versionSpec: '20.x'
         displayName: 'Install Node.js'
-        condition: eq('${{parameters.language}}', 'angular')
+        condition: or(eq('${{parameters.language}}', 'angular'), eq('${{parameters.language}}', 'node'))
 
       - script: |
           npm ci
           npm version ${{ parameters.releaseVersion }} --no-git-tag-version
-        displayName: 'Update version'
-        condition: eq('${{parameters.language}}', 'angular')
+        displayName: 'Update Node/Angular version'
+        condition: or(eq('${{parameters.language}}', 'angular'), eq('${{parameters.language}}', 'node'))
 
       - task: PowerShell@2
         displayName: 'Assembly Version Generation'
@@ -43,7 +43,23 @@ jobs:
             # replace the old line with the <AssemblyVersion> tag with a new one
             (Get-Content $ProjectFile) | Foreach-Object {$_ -replace '$(assemblyLine)', $NewAssemblyVersionLine} | Set-Content $ProjectFile
         condition: eq('${{parameters.language}}', '.net')
-      
+
+      - script: |
+          if [ -f pyproject.toml ]; then
+            sed -i "s/^version = \".*\"/version = \"${{ parameters.releaseVersion }}\"/" pyproject.toml
+          elif [ -f setup.cfg ]; then
+            sed -i "s/^version = .*/version = ${{ parameters.releaseVersion }}/" setup.cfg
+          elif [ -f setup.py ]; then
+            sed -i "s/version=['\"].*['\"]/version='${{ parameters.releaseVersion }}'/" setup.py
+          fi
+        displayName: 'Update Python version'
+        condition: eq('${{parameters.language}}', 'python')
+
+      - script: |
+          mvn versions:set -B -ntp -DnewVersion=${{ parameters.releaseVersion }} -DgenerateBackupPoms=false
+        displayName: 'Update Maven POM version'
+        condition: eq('${{parameters.language}}', 'maven')
+
       - bash: |
           git config --global user.email "ci-service@example.com"
           git config --global user.name "CI Service"
