@@ -1,6 +1,7 @@
 ﻿parameters:
   - name: sonarKey
     type: string
+    default: ''
   - name: environment
     type: string
   - name: firebaseToken
@@ -50,22 +51,23 @@ jobs:
                 filename: sh
                 arguments: -c "echo \"##vso[task.setvariable variable=imageTag]$(Build.SourceBranchName)-$(releaseVersion)\"
 
-            - task: SonarQubePrepare@5
-              displayName: 'Prepare Sonar'
-              inputs:
-                SonarQube: '${{ parameters.sonarConnection }}'
-                scannerMode: 'CLI'
-                configMode: 'manual'
-                cliProjectKey: ${{ parameters.sonarKey }}
-                cliSources: '.'
-                cliProjectName: $(Build.Repository.Name)
-                extraProperties: |
-                  sonar.exclusions=/coveragereport/**
-                  sonar.flutter.coverage.reportPath=/home/vsts/work/1/s/src/coverage/lcov.info
-                  sonar.projectVersion=$(imageTag)
-                  sonar.c.file.suffixes=-
-                  sonar.cpp.file.suffixes=-
-                  sonar.objc.file.suffixes=-
+            - ${{ if ne(parameters.sonarKey, '') }}:
+              - task: SonarQubePrepare@5
+                displayName: 'Prepare Sonar'
+                inputs:
+                  SonarQube: '${{ parameters.sonarConnection }}'
+                  scannerMode: 'CLI'
+                  configMode: 'manual'
+                  cliProjectKey: ${{ parameters.sonarKey }}
+                  cliSources: '.'
+                  cliProjectName: $(Build.Repository.Name)
+                  extraProperties: |
+                    sonar.exclusions=/coveragereport/**
+                    sonar.flutter.coverage.reportPath=/home/vsts/work/1/s/src/coverage/lcov.info
+                    sonar.projectVersion=$(imageTag)
+                    sonar.c.file.suffixes=-
+                    sonar.cpp.file.suffixes=-
+                    sonar.objc.file.suffixes=-
 
             - task: PowerShell@2
               displayName: 'Setup environment'
@@ -103,13 +105,13 @@ jobs:
                 #    projectDirectory: './src/'
                 #    generateCodeCoverageReport: true
 
-            - task: SonarQubeAnalyze@5
-              displayName: 'Sonar analysis'
-
-            - task: SonarQubePublish@5
-              displayName: 'Sonar publish'
-              inputs:
-                pollingTimeoutSec: '300'
+            - ${{ if ne(parameters.sonarKey, '') }}:
+              - task: SonarQubeAnalyze@5
+                displayName: 'Sonar analysis'
+              - task: SonarQubePublish@5
+                displayName: 'Sonar publish'
+                inputs:
+                  pollingTimeoutSec: '300'
             
             # - task: reportgenerator@5
             #   displayName: 'Generating test report'

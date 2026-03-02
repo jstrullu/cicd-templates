@@ -35,6 +35,7 @@ parameters:
     default: patch
   - name: sonarKey
     type: string
+    default: ''
   - name: dockerRegistry
     type: string
   - name: containerRegistry

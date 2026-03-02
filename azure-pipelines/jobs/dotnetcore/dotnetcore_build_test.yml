@@ -1,6 +1,7 @@
 ﻿parameters:
   - name: sonarProjectKey
     type: string
+    default: ''
   - name: projectFile
     type: string
   - name: projectVersion
@@ -23,17 +24,18 @@ jobs:
             # replace the old line with the <AssemblyVersion> tag with a new one
             (Get-Content $ProjectFile) | Foreach-Object {$_ -replace '$(assemblyLine)', $NewAssemblyVersionLine} | Set-Content $ProjectFile
       
-      - task: SonarQubePrepare@5
-        displayName: 'Prepare Sonar'
-        continueOnError: true
-        inputs:
-          SonarQube: '${{ parameters.sonarConnection }}'
-          scannerMode: 'MSBuild'
-          projectKey: ${{ parameters.sonarProjectKey }}
-          projectName: $(Build.Repository.Name)
-          projectVersion: ${{ parameters.projectVersion }}
-          extraProperties: |
-            sonar.cs.opencover.reportsPaths=**/coverage.opencover.xml
+      - ${{ if ne(parameters.sonarProjectKey, '') }}:
+        - task: SonarQubePrepare@5
+          displayName: 'Prepare Sonar'
+          continueOnError: true
+          inputs:
+            SonarQube: '${{ parameters.sonarConnection }}'
+            scannerMode: 'MSBuild'
+            projectKey: ${{ parameters.sonarProjectKey }}
+            projectName: $(Build.Repository.Name)
+            projectVersion: ${{ parameters.projectVersion }}
+            extraProperties: |
+              sonar.cs.opencover.reportsPaths=**/coverage.opencover.xml
       - task: DotNetCoreCLI@2
         displayName: 'Restore'
         inputs:
@@ -71,14 +73,15 @@ jobs:
           testRunTitle: 'Unit Tests'
           mergeTestResults: true
           condition: succeededOrFailed()
-      - task: SonarQubeAnalyze@5
-        displayName: 'Sonar analysis'
-        continueOnError: true
-      - task: SonarQubePublish@5
-        displayName: 'Publish sonar'
-        continueOnError: true
-        inputs:
-          pollingTimeoutSec: '300'
+      - ${{ if ne(parameters.sonarProjectKey, '') }}:
+        - task: SonarQubeAnalyze@5
+          displayName: 'Sonar analysis'
+          continueOnError: true
+        - task: SonarQubePublish@5
+          displayName: 'Publish sonar'
+          continueOnError: true
+          inputs:
+            pollingTimeoutSec: '300'
       - task: reportgenerator@5
         displayName: 'Report Generator'
         continueOnError: true

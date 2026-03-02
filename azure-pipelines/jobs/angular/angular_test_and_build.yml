@@ -1,6 +1,7 @@
 parameters:
   - name: sonarKey
     type: string
+    default: ''
   - name: projectVersion
     type: string
   - name: jsonFile

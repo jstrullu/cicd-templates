@@ -1,6 +1,7 @@
 parameters:
   - name: sonarKey
     type: string
+    default: ''
   - name: javaVersion
     type: string
   - name: projectVersion
@@ -21,8 +22,7 @@ jobs:
       parameters:
         jsonFile: ${{parameters.jsonFile}}
         releaseVersion: ${{parameters.projectVersion}}
-    - bash: echo ${{parameters.sonarKey}}
-    - ${{ if ne(parameters.sonarKey, ' ') }}:
+    - ${{ if ne(parameters.sonarKey, '') }}:
       - task: SonarQubePrepare@5
         inputs:
           SonarQube: '${{ parameters.sonarConnection }}'
@@ -40,7 +40,7 @@ jobs:
         tasks: 'build'
         publishJUnitResults: false
         javaHomeOption: 'JDKVersion'
-        ${{ if ne(parameters.sonarKey, ' ') }}:
+        ${{ if ne(parameters.sonarKey, '') }}:
           sonarQubeRunAnalysis: true
           sqGradlePluginVersionChoice: 'specify'
           sonarQubeGradlePluginVersion: '2.6.1'
@@ -51,7 +51,7 @@ jobs:
         targetPath: '$(Build.SourcesDirectory)'
         artifact: 'drop'
         publishLocation: 'pipeline'
-    - ${{ if ne(parameters.sonarKey, ' ') }}:
+    - ${{ if ne(parameters.sonarKey, '') }}:
       - task: SonarQubePublish@5
         inputs:
           pollingTimeoutSec: '300'
