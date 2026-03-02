@@ -1,0 +1,40 @@
+name: 'Flutter Firebase Deploy'
+description: 'Téléchargement de l''artefact et déploiement sur Firebase Hosting'
+
+inputs:
+  environment:
+    description: 'Environnement cible (dev, prod)'
+    required: true
+  firebase-token:
+    description: 'Token/credentials Firebase (JSON du service account)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Téléchargement de l'artefact
+      uses: actions/download-artifact@v4
+      with:
+        name: drop
+        path: ${{ github.workspace }}
+
+    - name: Installation de Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Configuration de l'environnement
+      shell: bash
+      run: |
+        cd tools/
+        node environment-generator ${{ inputs.environment }}
+
+    - name: Déploiement Firebase
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.firebase-token }}
+      run: |
+        npm install -g firebase-tools
+        echo "$TOKEN" > "$HOME/gcloud.json"
+        export GOOGLE_APPLICATION_CREDENTIALS="$HOME/gcloud.json"
+        firebase deploy --only hosting

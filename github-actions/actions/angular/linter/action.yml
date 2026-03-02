@@ -1,0 +1,27 @@
+name: 'Angular Linter'
+description: 'Installation des dépendances et exécution du linter pour les projets Angular'
+
+inputs:
+  project-version:
+    description: 'Version du projet'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Installation des dépendances
+      shell: bash
+      run: npm ci
+
+    - name: Mise à jour du numéro de version
+      shell: bash
+      run: npm version ${{ inputs.project-version }} --no-git-tag-version
+
+    - name: Exécution du linter
+      shell: bash
+      run: npm run lint

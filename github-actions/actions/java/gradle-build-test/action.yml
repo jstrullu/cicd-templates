@@ -1,0 +1,61 @@
+name: 'Java Gradle Build & Test'
+description: 'Build et test Gradle avec analyse SonarQube optionnelle'
+
+inputs:
+  sonar-key:
+    description: 'Clé du projet SonarQube (laisser vide pour désactiver Sonar)'
+    required: false
+    default: ''
+  java-version:
+    description: 'Version de Java'
+    required: true
+  project-version:
+    description: 'Version du projet'
+    required: true
+  fichier-json:
+    description: 'Nom du fichier JSON de version'
+    required: true
+    default: 'cicd.json'
+  sonar-host-url:
+    description: 'URL du serveur SonarQube'
+    required: false
+    default: ''
+  sonar-token:
+    description: 'Token d''authentification SonarQube'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Mise à jour du fichier de version
+      uses: jstrullu/cicd/github-actions/actions/set-version-file@master
+      with:
+        fichier-json: ${{ inputs.fichier-json }}
+        release-version: ${{ inputs.project-version }}
+
+    - name: Installation de Java ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java-version }}
+
+    - name: Build Gradle
+      shell: bash
+      run: |
+        chmod +x ./gradlew
+        if [ -n "${{ inputs.sonar-key }}" ] && [ "${{ inputs.sonar-key }}" != " " ]; then
+          ./gradlew build \
+            -Dsonar.projectKey="${{ inputs.sonar-key }}" \
+            -Dsonar.host.url="${{ inputs.sonar-host-url }}" \
+            -Dsonar.token="${{ inputs.sonar-token }}" \
+            sonar
+        else
+          ./gradlew build
+        fi
+
+    - name: Upload de l'artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: drop
+        path: ${{ github.workspace }}

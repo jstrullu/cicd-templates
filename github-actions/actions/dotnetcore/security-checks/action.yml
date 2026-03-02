@@ -1,0 +1,31 @@
+name: 'Vérifications de sécurité .NET'
+description: 'Analyse de sécurité Snyk pour les projets .NET Core'
+
+inputs:
+  target-file:
+    description: 'Fichier cible pour l''analyse Snyk (ex: solution.sln)'
+    required: true
+  snyk-token:
+    description: 'Token d''authentification Snyk'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Snyk CLI
+      shell: bash
+      run: npm install -g snyk
+
+    - name: Authentification Snyk
+      shell: bash
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
+      run: snyk auth "$SNYK_TOKEN"
+
+    - name: Analyse de sécurité Snyk
+      shell: bash
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
+      run: |
+        snyk test --file="${{ inputs.target-file }}" || true
+        snyk monitor --file="${{ inputs.target-file }}" || true

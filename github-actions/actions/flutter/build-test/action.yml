@@ -1,0 +1,82 @@
+name: 'Flutter Build & Test'
+description: 'Build web, tests, analyse SonarQube et couverture de code pour les projets Flutter'
+
+inputs:
+  sonar-key:
+    description: 'Clé du projet SonarQube'
+    required: true
+  sonar-host-url:
+    description: 'URL du serveur SonarQube'
+    required: true
+  sonar-token:
+    description: 'Token d''authentification SonarQube'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+
+    - name: Installation de Cider
+      shell: bash
+      run: flutter pub global activate cider
+
+    - name: Récupération de la version actuelle
+      id: version
+      shell: bash
+      run: |
+        export PATH="$PATH":"$HOME/.pub-cache/bin"
+        cd src/
+        VERSION_TAG=$(cider version)
+        echo "release-version=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+
+    - name: Création du tag de version
+      id: tag
+      shell: bash
+      run: |
+        branch_name="${GITHUB_REF_NAME}"
+        echo "image-tag=${branch_name}-${{ steps.version.outputs.release-version }}" >> "$GITHUB_OUTPUT"
+
+    - name: Installation de Java 11
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v5
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+      with:
+        args: >
+          -Dsonar.projectKey=${{ inputs.sonar-key }}
+          -Dsonar.projectName=${{ github.event.repository.name }}
+          -Dsonar.projectVersion=${{ steps.tag.outputs.image-tag }}
+          -Dsonar.sources=src/lib
+          -Dsonar.exclusions=/coveragereport/**
+          -Dsonar.flutter.coverage.reportPath=src/coverage/lcov.info
+          -Dsonar.c.file.suffixes=-
+          -Dsonar.cpp.file.suffixes=-
+          -Dsonar.objc.file.suffixes=-
+
+    - name: Build Flutter web
+      shell: bash
+      run: |
+        cd src/
+        flutter build web
+
+    - name: Tests Flutter
+      shell: bash
+      run: |
+        cd src/
+        flutter test --coverage || true
+
+    - name: Upload de l'artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: drop
+        path: src/

@@ -1,0 +1,60 @@
+# Pipeline Flutter — Copier dans .github/workflows/ du repo consommateur
+# Variables à configurer dans la section env ci-dessous
+name: Flutter Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  VERSION_INCREMENT: 'patch'
+  SONAR_KEY: ''               # Clé du projet SonarQube
+
+jobs:
+  initialisation:
+    runs-on: ubuntu-latest
+    outputs:
+      release-version: ${{ steps.versioning.outputs.release-version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Flutter Version Increment
+        id: versioning
+        uses: jstrullu/cicd/github-actions/actions/flutter/version-increment@master
+        with:
+          version-increment: ${{ env.VERSION_INCREMENT }}
+
+  deploy-dev:
+    runs-on: ubuntu-latest
+    needs: initialisation
+    if: github.ref_name == 'master'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & Deploy Firebase Dev
+        uses: jstrullu/cicd/github-actions/actions/flutter/build-firebase-deploy@master
+        with:
+          sonar-key: ${{ env.SONAR_KEY }}
+          environment: 'dev'
+          firebase-token: ${{ secrets.FIREBASE_TOKEN_DEV }}
+          sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+          sonar-token: ${{ secrets.SONAR_TOKEN }}
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: [initialisation, deploy-dev]
+    if: github.ref_name == 'master'
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & Deploy Firebase Prod
+        uses: jstrullu/cicd/github-actions/actions/flutter/build-firebase-deploy@master
+        with:
+          sonar-key: ${{ env.SONAR_KEY }}
+          environment: 'prod'
+          firebase-token: ${{ secrets.FIREBASE_TOKEN_PROD }}
+          sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+          sonar-token: ${{ secrets.SONAR_TOKEN }}

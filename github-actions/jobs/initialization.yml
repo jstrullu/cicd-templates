@@ -1,9 +1,0 @@
-name: initialization
-
-on:
-  workflow-dispatch:
-    inputs:
-      versionIncrement:
-        required: true
-      jsonFile:
-        required: true

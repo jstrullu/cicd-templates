@@ -1,0 +1,86 @@
+name: 'Flutter Version Increment'
+description: 'Bump de version Flutter via Cider, commit, tag et push'
+
+inputs:
+  version-increment:
+    description: 'Niveau de bump (patch, minor, major)'
+    required: false
+    default: 'patch'
+
+outputs:
+  release-version:
+    description: 'Version après le bump'
+    value: ${{ steps.bump.outputs.release-version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+
+    - name: Détection du niveau de bump depuis la PR
+      id: detect-increment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        increment="${{ inputs.version-increment }}"
+
+        if [ "${{ github.event_name }}" = "push" ]; then
+          pr_title=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0].title // empty' 2>/dev/null || true)
+
+          if [ -n "$pr_title" ]; then
+            version_keyword=$(echo "$pr_title" | tr -d "\"'\`" | grep -oi '#VERSION[[:space:]]*[a-z]*' | head -1 || true)
+            if [ -n "$version_keyword" ]; then
+              parsed=$(echo "$version_keyword" | sed 's/#VERSION[[:space:]]*//' | tr '[:upper:]' '[:lower:]')
+              if [[ "$parsed" == "major" || "$parsed" == "minor" || "$parsed" == "patch" ]]; then
+                increment="$parsed"
+              fi
+            fi
+          fi
+        fi
+
+        echo "increment=$increment" >> "$GITHUB_OUTPUT"
+
+    - name: Installation de Dart et Cider
+      shell: bash
+      run: |
+        flutter pub global activate cider
+
+    - name: Bump de version
+      id: bump
+      shell: bash
+      run: |
+        export PATH="$PATH":"$HOME/.pub-cache/bin"
+        cd src/
+        VERSION_TAG=$(cider bump ${{ steps.detect-increment.outputs.increment }})
+        echo "release-version=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+
+    - name: Configuration Git
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: |
+        git config --global user.email "service@slhtech.fr"
+        git config --global user.name "Service"
+
+    - name: Commit de la version
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: |
+        git add -A
+        git commit -m "[skip ci] Set release version to ${{ steps.bump.outputs.release-version }}"
+
+    - name: Tag de la version
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: |
+        branch_name="${GITHUB_REF_NAME}"
+        git tag -fa "${branch_name}-${{ steps.bump.outputs.release-version }}" -m "${{ steps.bump.outputs.release-version }}"
+
+    - name: Push du commit et du tag
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: git push origin HEAD --follow-tags

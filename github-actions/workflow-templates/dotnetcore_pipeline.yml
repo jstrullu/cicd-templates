@@ -1,0 +1,75 @@
+# Pipeline .NET Core — Copier dans .github/workflows/ du repo consommateur
+# Variables à configurer dans la section env ci-dessous
+name: .NET Core Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  VERSION_INCREMENT: 'patch'
+  SONAR_KEY: ''                # Clé du projet SonarQube
+  SECURITY_TARGET_FILE: ''     # Fichier cible pour Snyk (ex: solution.sln)
+  PROJECT_FILE: ''             # Chemin du fichier .csproj principal
+  FICHIER_JSON: 'cicd.json'
+
+jobs:
+  initialisation:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.versioning.outputs.version }}
+      docker-tag: ${{ steps.versioning.outputs.docker-tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Versionnement sémantique
+        id: versioning
+        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        with:
+          version-increment: ${{ env.VERSION_INCREMENT }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: initialisation
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & Test .NET Core
+        uses: jstrullu/cicd/github-actions/actions/dotnetcore/build-test@master
+        with:
+          sonar-project-key: ${{ env.SONAR_KEY }}
+          project-file: ${{ env.PROJECT_FILE }}
+          project-version: ${{ needs.initialisation.outputs.version }}
+          sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+          sonar-token: ${{ secrets.SONAR_TOKEN }}
+
+  security-checks:
+    runs-on: ubuntu-latest
+    needs: initialisation
+    if: ${{ vars.SECURITY_TARGET_FILE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vérifications de sécurité
+        uses: jstrullu/cicd/github-actions/actions/dotnetcore/security-checks@master
+        with:
+          target-file: ${{ env.SECURITY_TARGET_FILE }}
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
+
+  finalisation:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-test]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Finalisation
+        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        with:
+          release-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          language: '.net'
+          project-file: ${{ env.PROJECT_FILE }}

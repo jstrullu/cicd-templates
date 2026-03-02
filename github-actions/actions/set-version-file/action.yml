@@ -1,0 +1,29 @@
+name: 'Mise à jour du fichier de version'
+description: 'Crée ou met à jour le fichier cicd.json avec la version spécifiée'
+
+inputs:
+  fichier-json:
+    description: 'Nom du fichier JSON de version'
+    required: true
+    default: 'cicd.json'
+  release-version:
+    description: 'Version à écrire dans le fichier'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Création du fichier ${{ inputs.fichier-json }} s'il n'existe pas
+      shell: bash
+      run: |
+        if [ ! -f "${{ inputs.fichier-json }}" ]; then
+          echo '{"version": "0.0.0"}' > "${{ inputs.fichier-json }}"
+        fi
+        git add "${{ inputs.fichier-json }}"
+
+    - name: Mise à jour du fichier ${{ inputs.fichier-json }}
+      shell: bash
+      run: |
+        tmp=$(mktemp)
+        jq '.version = "${{ inputs.release-version }}"' "${{ inputs.fichier-json }}" > "$tmp"
+        mv "$tmp" "${{ inputs.fichier-json }}"

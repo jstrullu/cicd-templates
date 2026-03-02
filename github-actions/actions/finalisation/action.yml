@@ -1,0 +1,71 @@
+name: 'Finalisation'
+description: 'Commit de version, tag git et push. Gère Angular (npm version), .NET (AssemblyVersion dans .csproj) et Java/Flutter (cicd.json uniquement).'
+
+inputs:
+  release-version:
+    description: 'Version à commiter'
+    required: true
+  fichier-json:
+    description: 'Nom du fichier JSON de version'
+    required: true
+    default: 'cicd.json'
+  language:
+    description: 'Langage du projet (angular, .net, java, flutter)'
+    required: true
+  project-file:
+    description: 'Chemin du fichier .csproj (requis pour .net)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Mise à jour du fichier de version
+      uses: jstrullu/cicd/github-actions/actions/set-version-file@master
+      with:
+        fichier-json: ${{ inputs.fichier-json }}
+        release-version: ${{ inputs.release-version }}
+
+    - name: Installation de Node.js 18
+      if: inputs.language == 'angular'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Mise à jour de la version Angular
+      if: inputs.language == 'angular'
+      shell: bash
+      run: |
+        npm ci
+        npm version ${{ inputs.release-version }} --no-git-tag-version
+
+    - name: Mise à jour de AssemblyVersion (.NET)
+      if: inputs.language == '.net'
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.project-file }}" ]; then
+          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${{ inputs.release-version }}</AssemblyVersion>|g" "${{ inputs.project-file }}"
+        fi
+
+    - name: Configuration Git
+      shell: bash
+      run: |
+        git config --global user.email "service@slhtech.fr"
+        git config --global user.name "Service"
+
+    - name: Commit de la version
+      shell: bash
+      run: |
+        git add -A
+        git commit -m "[skip ci] Set release version to ${{ inputs.release-version }}"
+
+    - name: Tag de la version
+      shell: bash
+      run: |
+        branch_name="${GITHUB_REF_NAME}"
+        git tag -fa "${branch_name}-${{ inputs.release-version }}" -m "${{ inputs.release-version }}"
+
+    - name: Push du commit et du tag
+      shell: bash
+      run: |
+        git push origin HEAD --follow-tags

@@ -1,0 +1,78 @@
+name: 'Versionnement sémantique'
+description: 'Bump de version sémantique via cicd.json, avec détection du niveau de bump depuis le titre de la PR'
+
+inputs:
+  version-increment:
+    description: 'Niveau de bump par défaut (patch, minor, major)'
+    required: false
+    default: 'patch'
+  fichier-json:
+    description: 'Nom du fichier JSON de version'
+    required: true
+    default: 'cicd.json'
+
+outputs:
+  version:
+    description: 'Version sémantique après bump (ex: 1.2.3)'
+    value: ${{ steps.bump.outputs.version }}
+  docker-tag:
+    description: 'Tag Docker au format version (ex: 1.2.3)'
+    value: ${{ steps.bump.outputs.docker-tag }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Création du fichier ${{ inputs.fichier-json }} s'il n'existe pas
+      shell: bash
+      run: |
+        if [ ! -f "${{ inputs.fichier-json }}" ]; then
+          echo '{"version": "0.0.0"}' > "${{ inputs.fichier-json }}"
+        fi
+        git add "${{ inputs.fichier-json }}"
+
+    - name: Récupération de la version en cours
+      id: current
+      shell: bash
+      run: |
+        current_version=$(jq -r '.version' "${{ inputs.fichier-json }}")
+        echo "version=$current_version" >> "$GITHUB_OUTPUT"
+
+    - name: Détection du niveau de bump depuis la PR
+      id: detect-increment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        increment="${{ inputs.version-increment }}"
+
+        if [ "${{ github.event_name }}" = "push" ]; then
+          # Recherche de la PR associée au commit
+          pr_title=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0].title // empty' 2>/dev/null || true)
+
+          if [ -n "$pr_title" ]; then
+            # Recherche du mot-clé #VERSION dans le titre
+            version_keyword=$(echo "$pr_title" | tr -d "\"'\`" | grep -oi '#VERSION[[:space:]]*[a-z]*' | head -1 || true)
+            if [ -n "$version_keyword" ]; then
+              parsed=$(echo "$version_keyword" | sed 's/#VERSION[[:space:]]*//' | tr '[:upper:]' '[:lower:]')
+              if [[ "$parsed" == "major" || "$parsed" == "minor" || "$parsed" == "patch" ]]; then
+                increment="$parsed"
+              fi
+            fi
+          fi
+        fi
+
+        echo "increment=$increment" >> "$GITHUB_OUTPUT"
+
+    - name: Installation de semver
+      shell: bash
+      run: npm install -g semver
+
+    - name: Bump de la version
+      id: bump
+      shell: bash
+      run: |
+        new_version=$(semver "${{ steps.current.outputs.version }}" -i "${{ steps.detect-increment.outputs.increment }}")
+        docker_tag=$(echo "$new_version" | tr '[:upper:]' '[:lower:]')
+        echo "version=$new_version" >> "$GITHUB_OUTPUT"
+        echo "docker-tag=$docker_tag" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,101 @@
+name: '.NET Core Build & Test'
+description: 'Restore, build, test, analyse SonarQube et couverture de code pour les projets .NET Core'
+
+inputs:
+  sonar-project-key:
+    description: 'Clé du projet SonarQube'
+    required: true
+  project-file:
+    description: 'Chemin du fichier .csproj principal'
+    required: true
+  project-version:
+    description: 'Version du projet'
+    required: true
+  sonar-host-url:
+    description: 'URL du serveur SonarQube'
+    required: true
+  sonar-token:
+    description: 'Token d''authentification SonarQube'
+    required: true
+  dotnet-version:
+    description: 'Version du SDK .NET'
+    required: false
+    default: '8.0.x'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation du SDK .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Mise à jour de AssemblyVersion
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.project-file }}" ] && [ -f "${{ inputs.project-file }}" ]; then
+          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${{ inputs.project-version }}</AssemblyVersion>|g" "${{ inputs.project-file }}"
+        fi
+
+    - name: Installation de dotnet-sonarscanner
+      shell: bash
+      run: dotnet tool install --global dotnet-sonarscanner || true
+
+    - name: SonarQube Begin
+      shell: bash
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+      run: |
+        dotnet sonarscanner begin \
+          /k:"${{ inputs.sonar-project-key }}" \
+          /n:"${{ github.event.repository.name }}" \
+          /v:"${{ inputs.project-version }}" \
+          /d:sonar.host.url="${{ inputs.sonar-host-url }}" \
+          /d:sonar.token="$SONAR_TOKEN" \
+          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" || true
+
+    - name: Restore
+      shell: bash
+      run: dotnet restore **/*.csproj --no-cache
+
+    - name: Build
+      shell: bash
+      run: dotnet build --no-restore -c Release
+
+    - name: Tests unitaires
+      shell: bash
+      run: |
+        dotnet test **/*Tests.*.csproj \
+          --no-build -c Release \
+          --logger "trx;LogFileName=TEST.xml" \
+          /p:CollectCoverage=true \
+          /p:CoverletOutputFormat=opencover || true
+
+    - name: Tests avec couverture
+      shell: bash
+      run: |
+        dotnet test **/*Tests.*.csproj \
+          --configuration Release \
+          --collect "Code coverage" || true
+
+    - name: SonarQube End
+      shell: bash
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+      run: |
+        dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN" || true
+
+    - name: Installation de ReportGenerator
+      shell: bash
+      run: dotnet tool install --global dotnet-reportgenerator-globaltool || true
+
+    - name: Génération du rapport de couverture
+      shell: bash
+      run: |
+        coverage_files=$(find . -name "coverage.opencover.xml" -type f | tr '\n' ';')
+        if [ -n "$coverage_files" ]; then
+          reportgenerator \
+            -reports:"$coverage_files" \
+            -targetdir:"./coveragereport" \
+            -verbosity:Error || true
+        fi

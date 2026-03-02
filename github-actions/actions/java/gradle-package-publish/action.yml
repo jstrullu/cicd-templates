@@ -1,0 +1,52 @@
+name: 'Gradle Package Publish'
+description: 'Publication d''un package Gradle vers un repository de packages'
+
+inputs:
+  java-version:
+    description: 'Version de Java'
+    required: true
+  project-version:
+    description: 'Version du projet'
+    required: true
+  fichier-json:
+    description: 'Nom du fichier JSON de version'
+    required: true
+    default: 'cicd.json'
+  publish-username:
+    description: 'Nom d''utilisateur pour la publication'
+    required: false
+    default: ''
+  publish-token:
+    description: 'Token pour la publication'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Téléchargement de l'artefact
+      uses: actions/download-artifact@v4
+      with:
+        name: drop
+        path: ${{ github.workspace }}
+
+    - name: Mise à jour du fichier de version
+      uses: jstrullu/cicd/github-actions/actions/set-version-file@master
+      with:
+        fichier-json: ${{ inputs.fichier-json }}
+        release-version: ${{ inputs.project-version }}
+
+    - name: Installation de Java ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java-version }}
+
+    - name: Publication Gradle
+      shell: bash
+      env:
+        PUBLISH_USERNAME: ${{ inputs.publish-username }}
+        PUBLISH_TOKEN: ${{ inputs.publish-token }}
+      run: |
+        chmod +x ./gradlew
+        ./gradlew publish

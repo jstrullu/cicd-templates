@@ -1,0 +1,35 @@
+name: 'Déploiement Kubernetes'
+description: 'Remplacement de tokens dans les manifestes Kubernetes et déploiement via kubectl'
+
+inputs:
+  namespace:
+    description: 'Namespace Kubernetes cible'
+    required: true
+  manifests-path:
+    description: 'Chemin vers le répertoire des manifestes Kubernetes'
+    required: false
+    default: '.kube'
+  kubeconfig:
+    description: 'Contenu du fichier kubeconfig (base64 ou brut)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Remplacement des tokens dans les manifestes
+      uses: cschleiden/replace-tokens@v1
+      with:
+        files: '${{ inputs.manifests-path }}/**/*.yml'
+
+    - name: Configuration de kubectl
+      shell: bash
+      run: |
+        mkdir -p "$HOME/.kube"
+        echo "${{ inputs.kubeconfig }}" > "$HOME/.kube/config"
+        chmod 600 "$HOME/.kube/config"
+
+    - name: Déploiement sur Kubernetes
+      shell: bash
+      run: |
+        kubectl apply -f "${{ inputs.manifests-path }}/deployment.yml" -n "${{ inputs.namespace }}"
+        kubectl apply -f "${{ inputs.manifests-path }}/service.yml" -n "${{ inputs.namespace }}"

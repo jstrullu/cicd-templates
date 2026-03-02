@@ -1,0 +1,97 @@
+# Pipeline Java Gradle — Copier dans .github/workflows/ du repo consommateur
+# Variables à configurer dans la section env ci-dessous
+name: Java Gradle Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  VERSION_INCREMENT: 'patch'
+  FICHIER_JSON: 'cicd.json'
+  SONAR_KEY: ''               # Clé du projet SonarQube
+  JAVA_VERSION: '17'
+  DOCKER_REGISTRY: ''         # Adresse du registry Docker (ex: ghcr.io/org)
+  KUBE_NAMESPACE: ''          # Namespace Kubernetes cible
+
+jobs:
+  initialisation:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.versioning.outputs.version }}
+      docker-tag: ${{ steps.versioning.outputs.docker-tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Versionnement sémantique
+        id: versioning
+        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        with:
+          version-increment: ${{ env.VERSION_INCREMENT }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: initialisation
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & Test Java Gradle
+        uses: jstrullu/cicd/github-actions/actions/java/gradle-build-test@master
+        with:
+          sonar-key: ${{ env.SONAR_KEY }}
+          java-version: ${{ env.JAVA_VERSION }}
+          project-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+          sonar-token: ${{ secrets.SONAR_TOKEN }}
+
+  docker-build-and-publish:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-test]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: drop
+          path: ${{ github.workspace }}
+      - name: Docker Build & Push
+        uses: jstrullu/cicd/github-actions/actions/docker-build-push@master
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          image-name: ${{ github.event.repository.name }}
+          tag: ${{ needs.initialisation.outputs.docker-tag }}
+          registry-username: ${{ secrets.DOCKER_USERNAME }}
+          registry-password: ${{ secrets.DOCKER_PASSWORD }}
+
+  finalisation:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-test, docker-build-and-publish]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Finalisation
+        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        with:
+          release-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          language: 'java'
+
+  deploy-to-dev:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-test, docker-build-and-publish]
+    if: github.event_name != 'pull_request'
+    environment: Dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Déploiement Kubernetes
+        uses: jstrullu/cicd/github-actions/actions/kube-deploy@master
+        env:
+          BUILDID: ${{ needs.initialisation.outputs.docker-tag }}
+        with:
+          namespace: ${{ env.KUBE_NAMESPACE }}
+          kubeconfig: ${{ secrets.KUBECONFIG }}

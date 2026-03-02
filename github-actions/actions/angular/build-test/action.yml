@@ -1,0 +1,62 @@
+name: 'Angular Build & Test'
+description: 'Installation des dépendances, génération OpenAPI, build et publication d''artefact pour les projets Angular'
+
+inputs:
+  sonar-key:
+    description: 'Clé du projet SonarQube (non utilisé actuellement)'
+    required: false
+    default: ''
+  project-version:
+    description: 'Version du projet'
+    required: true
+  fichier-json:
+    description: 'Nom du fichier JSON de version'
+    required: true
+    default: 'cicd.json'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    # SonarQube Prepare (commenté comme dans Azure Pipelines)
+    # - name: SonarQube Prepare
+    #   uses: SonarSource/sonarqube-scan-action@v5
+
+    - name: Installation des dépendances
+      shell: bash
+      run: |
+        npm install -g @angular/cli
+        npm install
+
+    - name: Mise à jour du numéro de version
+      shell: bash
+      run: npm version ${{ inputs.project-version }} --no-git-tag-version
+
+    - name: Génération OpenAPI
+      shell: bash
+      run: npm run generate:openapi
+
+    - name: Build
+      shell: bash
+      run: npm run build
+
+    # Tests Angular (commenté comme dans Azure Pipelines)
+    # - name: Tests Angular
+    #   shell: bash
+    #   run: npx ng test --watch=false --browsers ChromeHeadless
+
+    # SonarQube Analyze (commenté comme dans Azure Pipelines)
+    # - name: SonarQube Analyze
+
+    - name: Upload de l'artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: drop
+        path: ${{ github.workspace }}
+
+    # SonarQube Publish (commenté comme dans Azure Pipelines)
+    # - name: SonarQube Publish

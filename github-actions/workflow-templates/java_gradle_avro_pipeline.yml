@@ -1,0 +1,72 @@
+# Pipeline Java Gradle Avro — Copier dans .github/workflows/ du repo consommateur
+# Variables à configurer dans la section env ci-dessous
+name: Java Gradle Avro Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  VERSION_INCREMENT: 'patch'
+  FICHIER_JSON: 'cicd.json'
+  JAVA_VERSION: '17'
+
+jobs:
+  initialisation:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.versioning.outputs.version }}
+      docker-tag: ${{ steps.versioning.outputs.docker-tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Versionnement sémantique
+        id: versioning
+        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        with:
+          version-increment: ${{ env.VERSION_INCREMENT }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+
+  build:
+    runs-on: ubuntu-latest
+    needs: initialisation
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Java Gradle Avro
+        uses: jstrullu/cicd/github-actions/actions/java/gradle-avro-build@master
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          project-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+
+  publish-artifact:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publication du package Gradle
+        uses: jstrullu/cicd/github-actions/actions/java/gradle-package-publish@master
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          project-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          publish-username: ${{ secrets.PUBLISH_USERNAME }}
+          publish-token: ${{ secrets.PUBLISH_TOKEN }}
+
+  finalisation:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Finalisation
+        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        with:
+          release-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          language: 'java'

@@ -1,0 +1,48 @@
+name: 'Docker Build & Push'
+description: 'Build et push d''une image Docker vers un registry'
+
+inputs:
+  registry:
+    description: 'Adresse du registry Docker (ex: ghcr.io/org)'
+    required: true
+  image-name:
+    description: 'Nom de l''image Docker'
+    required: true
+  tag:
+    description: 'Tag de l''image Docker'
+    required: true
+  dockerfile:
+    description: 'Chemin vers le Dockerfile'
+    required: false
+    default: './Dockerfile'
+  context:
+    description: 'Contexte de build Docker'
+    required: false
+    default: '.'
+  registry-username:
+    description: 'Nom d''utilisateur du registry'
+    required: false
+    default: ''
+  registry-password:
+    description: 'Mot de passe du registry'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Connexion au registry Docker
+      if: inputs.registry-username != ''
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Build et push de l'image Docker
+      uses: docker/build-push-action@v6
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile }}
+        push: true
+        tags: ${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.tag }}
