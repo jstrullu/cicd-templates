@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '*-*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Freeze changelog and extract release notes
+        run: python scripts/freeze_changelog.py "${{ github.ref_name }}"
+
+      - name: Commit frozen changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet CHANGELOG.md; then
+            git add CHANGELOG.md
+            git commit -m "docs: freeze changelog for ${{ github.ref_name }} [skip ci]"
+            git push origin HEAD:master
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(echo "${{ github.ref_name }}" | grep -oP '\d+\.\d+\.\d+')
+          gh release create "${{ github.ref_name }}" \
+            --title "v${VERSION}" \
+            --notes-file /tmp/release_notes.md
