@@ -1,0 +1,102 @@
+parameters:
+  - name: sonarKey
+    type: string
+    default: ''
+  - name: goVersion
+    type: string
+    default: '1.22'
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+  - name: sonarConnection
+    type: string
+    default: Sonar
+  - name: buildFlags
+    type: string
+    default: './...'
+  - name: testFlags
+    type: string
+    default: '-v -race -coverprofile=coverage.out -covermode=atomic ./...'
+
+jobs:
+  - job: Build_Test
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: GoTool@0
+      displayName: 'Use Go ${{ parameters.goVersion }}'
+      inputs:
+        version: '${{ parameters.goVersion }}'
+
+    - script: go mod download
+      displayName: 'Download dependencies'
+
+    - script: go vet ./...
+      displayName: 'Vet'
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubePrepare@5
+        displayName: 'Prepare Sonar'
+        inputs:
+          SonarQube: '${{ parameters.sonarConnection }}'
+          scannerMode: 'CLI'
+          configMode: 'manual'
+          cliProjectKey: ${{ parameters.sonarKey }}
+          cliSources: '.'
+          cliProjectName: $(Build.Repository.Name)
+          extraProperties: |
+            sonar.go.coverage.reportPaths=coverage.out
+            sonar.go.tests.reportPaths=test-report.json
+            sonar.projectVersion=${{ parameters.projectVersion }}
+
+    - script: |
+        go build -ldflags "-X main.version=${{ parameters.projectVersion }}" ${{ parameters.buildFlags }}
+      displayName: 'Build'
+
+    - script: |
+        go test ${{ parameters.testFlags }} 2>&1 | tee test-output.txt
+        go install github.com/jstemmer/go-junit-report/v2@latest
+        cat test-output.txt | go-junit-report -set-exit-code > test-report.xml
+      displayName: 'Run tests with coverage'
+
+    - task: PublishTestResults@2
+      displayName: 'Publish Test Results'
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-report.xml'
+        testRunTitle: 'Go Unit Tests'
+        mergeTestResults: true
+      condition: succeededOrFailed()
+
+    - script: |
+        go install github.com/boumenot/gocover-cobertura@latest
+        gocover-cobertura < coverage.out > coverage.xml
+      displayName: 'Convert coverage to Cobertura'
+      condition: succeededOrFailed()
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish code coverage'
+      inputs:
+        codeCoverageTool: Cobertura
+        summaryFileLocation: '**/coverage.xml'
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubeAnalyze@5
+        displayName: 'Sonar analysis'
+      - task: SonarQubePublish@5
+        displayName: 'Sonar publish'
+        inputs:
+          pollingTimeoutSec: '300'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)'
+        artifact: 'drop'
+        publishLocation: 'pipeline'
