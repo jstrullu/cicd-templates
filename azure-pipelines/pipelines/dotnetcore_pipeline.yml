@@ -2,6 +2,13 @@
   - master
 
 parameters:
+  - name: appName
+    displayName: Application name
+    type: string
+    default: $(Build.Repository.Name)
+  - name: jsonFile
+    type: string
+    default: cicd.json
   - name: versionIncrement
     type: string
     default: 'patch'
@@ -33,8 +40,14 @@ parameters:
     type: string
   - name: projectFile
     type: string
-  - name: jsonFile
+  - name: dockerRegistry
     type: string
+  - name: containerRegistry
+    type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -59,6 +72,43 @@ stages:
           sonarProjectKey: ${{parameters.sonarKey}}
           projectFile: ${{ parameters.projectFile }}
           projectVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/dotnetcore/dotnetcore_mutation_test.yml
+          parameters:
+            projectFile: ${{ parameters.projectFile }}
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
+
+  - stage: Docker_Build_And_Publish
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+    dependsOn:
+      - Initialization
+      - BuildAndTest
+    jobs:
+      - template: /jobs/docker_build_and_publish.yml
+        parameters:
+          registry: ${{ parameters.dockerRegistry }}
+          containerRegistry: ${{ parameters.containerRegistry }}
+          projectVersion: $(version)
+
+  - stage: Deploy
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+    dependsOn:
+      - Initialization
+      - BuildAndTest
+      - Docker_Build_And_Publish
+    variables:
+      BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+    jobs:
+      - template: /jobs/kube_deploy.yml
+        parameters:
+          env: $(deployEnv)
+          resource: ${{ parameters.appName }}
+          namespace: ${{ parameters.appName }}
 
   - stage: Finalization
     displayName: 'Finalization'
@@ -66,6 +116,8 @@ stages:
     dependsOn:
       - Initialization
       - BuildAndTest
+      - Docker_Build_And_Publish
+      - Deploy
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
       shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]

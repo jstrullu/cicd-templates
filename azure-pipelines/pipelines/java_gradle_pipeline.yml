@@ -44,6 +44,10 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -67,6 +71,12 @@ stages:
           javaVersion: ${{ parameters.javaVersion }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/java/java_gradle_mutation_test.yml
+          parameters:
+            javaVersion: ${{ parameters.javaVersion }}
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     variables:
@@ -80,23 +90,6 @@ stages:
           registry: ${{ parameters.dockerRegistry }}
           containerRegistry: ${{ parameters.containerRegistry }}
           projectVersion: $(version)
-
-  - stage: Finalization
-    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
-    dependsOn:
-      - Initialization
-      - Build_And_Test
-      - Docker_Build_And_Publish
-    variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
-    jobs:
-      - template: /jobs/finalisation.yml
-        parameters:
-          releaseVersion: $(version)
-          jsonFile: ${{ parameters.jsonFile }}
-          language: 'java'
-          shouldTag: $(shouldTag)
 
   - stage: Deploy
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
@@ -113,4 +106,22 @@ stages:
           env: $(deployEnv)
           resource: ${{ parameters.appName }}
           namespace: ${{ parameters.appName }}
+
+  - stage: Finalization
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
+      - Initialization
+      - Build_And_Test
+      - Docker_Build_And_Publish
+      - Deploy
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+          language: 'java'
+          shouldTag: $(shouldTag)
     

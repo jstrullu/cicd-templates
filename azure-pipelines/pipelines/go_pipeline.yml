@@ -48,6 +48,10 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -73,6 +77,13 @@ stages:
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
           buildFlags: ${{ parameters.buildFlags }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/go/go_mutation_test.yml
+          parameters:
+            goVersion: ${{ parameters.goVersion }}
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
+            buildFlags: ${{ parameters.buildFlags }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
@@ -87,23 +98,6 @@ stages:
           registry: ${{ parameters.dockerRegistry }}
           containerRegistry: ${{ parameters.containerRegistry }}
           projectVersion: $(version)
-
-  - stage: Finalization
-    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
-    dependsOn:
-      - Initialization
-      - Build_And_Test
-      - Docker_Build_And_Publish
-    variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
-    jobs:
-      - template: /jobs/finalisation.yml
-        parameters:
-          releaseVersion: $(version)
-          jsonFile: ${{ parameters.jsonFile }}
-          language: 'go'
-          shouldTag: $(shouldTag)
 
   - stage: Deploy
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
@@ -120,3 +114,21 @@ stages:
           env: $(deployEnv)
           resource: ${{ parameters.appName }}
           namespace: ${{ parameters.appName }}
+
+  - stage: Finalization
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
+      - Initialization
+      - Build_And_Test
+      - Docker_Build_And_Publish
+      - Deploy
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+          language: 'go'
+          shouldTag: $(shouldTag)

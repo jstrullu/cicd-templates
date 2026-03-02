@@ -1,0 +1,38 @@
+parameters:
+  - name: projectFile
+    type: string
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
+
+jobs:
+  - job: MutationTest
+    displayName: 'Mutation Testing (Stryker.NET)'
+    steps:
+      - checkout: self
+        clean: true
+        persistCredentials: true
+      - template: ../../steps/set_version_file.yml
+        parameters:
+          jsonFile: ${{ parameters.jsonFile }}
+          releaseVersion: ${{ parameters.projectVersion }}
+      - task: DotNetCoreCLI@2
+        displayName: 'Restore'
+        inputs:
+          command: restore
+          projects: '**/*.csproj'
+          nocache: true
+      - script: dotnet tool install --global dotnet-stryker
+        displayName: 'Install Stryker.NET'
+      - script: |
+          dotnet stryker --project "${{ parameters.projectFile }}" --reporter html --reporter json --output StrykerOutput
+        displayName: 'Run mutation tests'
+      - task: PublishPipelineArtifact@1
+        displayName: 'Publish mutation report'
+        inputs:
+          targetPath: '$(Build.SourcesDirectory)/StrykerOutput'
+          artifact: 'mutation-report'
+          publishLocation: 'pipeline'
+        condition: succeededOrFailed()

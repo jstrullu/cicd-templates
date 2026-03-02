@@ -1,0 +1,48 @@
+parameters:
+  - name: goVersion
+    type: string
+    default: '1.22'
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
+  - name: buildFlags
+    type: string
+    default: './...'
+
+jobs:
+  - job: MutationTest
+    displayName: 'Mutation Testing (go-mutesting)'
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: GoTool@0
+      displayName: 'Use Go ${{ parameters.goVersion }}'
+      inputs:
+        version: '${{ parameters.goVersion }}'
+
+    - script: go mod download
+      displayName: 'Download dependencies'
+
+    - script: |
+        go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+      displayName: 'Install go-mutesting'
+
+    - script: |
+        go-mutesting ${{ parameters.buildFlags }} > mutation-report.txt 2>&1 || true
+      displayName: 'Run mutation tests'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish mutation report'
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)/mutation-report.txt'
+        artifact: 'mutation-report'
+        publishLocation: 'pipeline'
+      condition: succeededOrFailed()

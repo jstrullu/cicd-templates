@@ -1,0 +1,58 @@
+parameters:
+  - name: javaVersion
+    type: string
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
+  - name: mavenOptions
+    type: string
+    default: '-B -ntp'
+  - name: pomFile
+    type: string
+    default: 'pom.xml'
+
+jobs:
+  - job: MutationTest
+    displayName: 'Mutation Testing (PITest)'
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: ${{ parameters.javaVersion }}
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    - task: Maven@4
+      displayName: 'Set POM version'
+      inputs:
+        mavenPomFile: '${{ parameters.pomFile }}'
+        goals: 'versions:set'
+        options: '${{ parameters.mavenOptions }} -DnewVersion=${{ parameters.projectVersion }} -DgenerateBackupPoms=false'
+        javaHomeOption: 'JDKVersion'
+        publishJUnitResults: false
+
+    - task: Maven@4
+      displayName: 'Run PITest mutation tests'
+      inputs:
+        mavenPomFile: '${{ parameters.pomFile }}'
+        goals: 'test-compile org.pitest:pitest-maven:mutationCoverage'
+        options: '${{ parameters.mavenOptions }}'
+        javaHomeOption: 'JDKVersion'
+        publishJUnitResults: false
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish mutation report'
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)/target/pit-reports'
+        artifact: 'mutation-report'
+        publishLocation: 'pipeline'
+      condition: succeededOrFailed()

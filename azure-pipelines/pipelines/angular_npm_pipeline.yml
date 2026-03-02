@@ -40,6 +40,10 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -63,6 +67,11 @@ stages:
           sonarKey: ${{ parameters.sonarKey }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/angular/angular_mutation_test.yml
+          parameters:
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
 
   - stage: Lint
     dependsOn:
@@ -90,24 +99,6 @@ stages:
           containerRegistry: ${{ parameters.containerRegistry }}
           projectVersion: $(version)
 
-  - stage: Finalization
-    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
-    dependsOn:
-      - Initialization
-      - Build_And_Test
-      - Lint
-      - Docker_Build_And_Publish
-    variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
-    jobs:
-      - template: /jobs/finalisation.yml
-        parameters:
-          releaseVersion: $(version)
-          jsonFile: ${{ parameters.jsonFile }}
-          language: 'angular'
-          shouldTag: $(shouldTag)
-
   - stage: Deploy
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     dependsOn:
@@ -124,3 +115,22 @@ stages:
           env: $(deployEnv)
           resource: ${{ parameters.appName }}
           namespace: ${{ parameters.appName }}
+
+  - stage: Finalization
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
+      - Initialization
+      - Build_And_Test
+      - Lint
+      - Docker_Build_And_Publish
+      - Deploy
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+          language: 'angular'
+          shouldTag: $(shouldTag)

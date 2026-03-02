@@ -1,0 +1,42 @@
+parameters:
+  - name: javaVersion
+    type: string
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
+
+jobs:
+  - job: MutationTest
+    displayName: 'Mutation Testing (PITest)'
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: ${{ parameters.javaVersion }}
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    - task: Gradle@3
+      displayName: 'Run PITest mutation tests'
+      inputs:
+        gradleWrapperFile: 'gradlew'
+        tasks: 'pitest'
+        javaHomeOption: 'JDKVersion'
+        publishJUnitResults: false
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish mutation report'
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)/build/reports/pitest'
+        artifact: 'mutation-report'
+        publishLocation: 'pipeline'
+      condition: succeededOrFailed()
