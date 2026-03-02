@@ -1,0 +1,126 @@
+trigger:
+  - master
+
+parameters:
+  - name: appName
+    displayName: Application name
+    type: string
+    default: $(Build.Repository.Name)
+  - name: jsonFile
+    type: string
+    default: cicd.json
+  - name: versionIncrement
+    type: string
+    default: 'patch'
+  - name: gitFlowType
+    displayName: Git flow strategy
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
+  - name: developIncrement
+    displayName: Version increment for develop branch (gitflow)
+    type: string
+    default: patch
+  - name: releaseIncrement
+    displayName: Version increment for release branches (gitflow)
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    displayName: Version increment for hotfix branches (gitflow)
+    type: string
+    default: patch
+  - name: javaVersion
+    displayName: Java version
+    type: string
+  - name: sonarKey
+    type: string
+    default: ''
+  - name: mavenGoals
+    displayName: Maven goals
+    type: string
+    default: 'clean verify'
+  - name: pomFile
+    displayName: Path to POM file
+    type: string
+    default: 'pom.xml'
+  - name: dockerRegistry
+    type: string
+  - name: containerRegistry
+    type: string
+
+stages:
+  - stage: Initialization
+    jobs:
+      - template: /jobs/json_semantic_version.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+          jsonFile: ${{ parameters.jsonFile }}
+          gitFlowType: ${{ parameters.gitFlowType }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
+
+  - stage: Build_And_Test
+    dependsOn: Initialization
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/java/java_maven_test_and_build.yml
+        parameters:
+          sonarKey: ${{ parameters.sonarKey }}
+          javaVersion: ${{ parameters.javaVersion }}
+          projectVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+          mavenGoals: ${{ parameters.mavenGoals }}
+          pomFile: ${{ parameters.pomFile }}
+
+  - stage: Docker_Build_And_Publish
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+    dependsOn:
+      - Initialization
+      - Build_And_Test
+    jobs:
+      - template: /jobs/docker_build_and_publish.yml
+        parameters:
+          registry: ${{ parameters.dockerRegistry }}
+          containerRegistry: ${{ parameters.containerRegistry }}
+          projectVersion: $(version)
+
+  - stage: Finalization
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
+      - Initialization
+      - Build_And_Test
+      - Docker_Build_And_Publish
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+          language: 'maven'
+          shouldTag: $(shouldTag)
+
+  - stage: Deploy
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+    dependsOn:
+      - Initialization
+      - Build_And_Test
+      - Docker_Build_And_Publish
+    variables:
+      BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+    jobs:
+      - template: /jobs/kube_deploy.yml
+        parameters:
+          env: $(deployEnv)
+          resource: ${{ parameters.appName }}
+          namespace: ${{ parameters.appName }}

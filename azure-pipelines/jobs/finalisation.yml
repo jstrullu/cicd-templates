@@ -55,6 +55,11 @@ jobs:
         displayName: 'Update Python version'
         condition: eq('${{parameters.language}}', 'python')
 
+      - script: |
+          mvn versions:set -B -ntp -DnewVersion=${{ parameters.releaseVersion }} -DgenerateBackupPoms=false
+        displayName: 'Update Maven POM version'
+        condition: eq('${{parameters.language}}', 'maven')
+
       - bash: |
           git config --global user.email "ci-service@example.com"
           git config --global user.name "CI Service"
