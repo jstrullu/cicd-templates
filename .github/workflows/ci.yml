@@ -17,23 +17,7 @@ jobs:
         run: pip install yamllint
 
       - name: Preprocess and lint YAML files
-        run: |
-          exit_code=0
-          for file in $(find azure-pipelines -name '*.yml'); do
-            # Replace Azure Pipelines expressions with placeholders so yamllint
-            # can parse the file.  Expressions like ${{ ... }} and $[ ... ] are
-            # not valid YAML and would cause false-positive errors.
-            sed \
-              -e 's/\${{[^}]*}}/PLACEHOLDER/g' \
-              -e 's/\$\[[^]]*\]/PLACEHOLDER/g' \
-              "$file" > /tmp/lint_target.yml
-
-            if ! yamllint -c .yamllint.yml /tmp/lint_target.yml; then
-              echo "::error file=$file::yamllint failed"
-              exit_code=1
-            fi
-          done
-          exit $exit_code
+        run: bash scripts/lint_yaml.sh
 
   validate-templates:
     name: Validate template conventions
@@ -59,7 +43,7 @@ jobs:
 
       - name: Check CHANGELOG.md was modified
         run: |
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^CHANGELOG.md$'; then
+          if git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -q '^CHANGELOG.md$'; then
             echo "CHANGELOG.md has been updated."
           else
             echo "::warning::CHANGELOG.md was not updated in this PR. Please document your changes."
