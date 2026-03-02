@@ -6,6 +6,9 @@
     type: string
   - name: projectVersion
     type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
   - name: sonarConnection
     type: string
     default: Sonar
@@ -13,6 +16,13 @@
 jobs:
   - job: BuildAndTest
     steps:
+      - checkout: self
+        clean: true
+        persistCredentials: true
+      - template: ../../steps/set_version_file.yml
+        parameters:
+          jsonFile: ${{ parameters.jsonFile }}
+          releaseVersion: ${{ parameters.projectVersion }}
       - task: PowerShell@2
         displayName: 'Assembly Version Generation'
         inputs:
@@ -95,3 +105,9 @@ jobs:
           codeCoverageTool: Cobertura
           summaryFileLocation: './coveragereport/Cobertura.xml'
           reportDirectory: './coveragereport'
+      - task: PublishPipelineArtifact@1
+        displayName: 'Publish artifact'
+        inputs:
+          targetPath: '$(Build.SourcesDirectory)'
+          artifact: 'drop'
+          publishLocation: 'pipeline'
