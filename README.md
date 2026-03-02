@@ -4,28 +4,46 @@ Reusable CI/CD pipeline templates for **Azure Pipelines** and **GitHub Actions**
 
 ## Supported Stacks
 
-| Stack | Pipeline | Build & Test | Docker | Kubernetes | SonarQube |
-|-------|----------|-------------|--------|------------|-----------|
-| .NET Core | `dotnetcore_pipeline.yml` | Yes | - | - | Yes |
-| Java/Gradle | `java_gradle_pipeline.yml` | Yes | Yes | Yes | Yes |
-| Java/Gradle (Avro) | `java_gradle_avro_pipeline.yml` | Yes | - | - | - |
-| Angular/npm | `angular_npm_pipeline.yml` | Yes | Yes | Yes | Optional |
-| Flutter | `flutter_pipeline.yml` | Yes | - | Firebase | Yes |
+| Stack | Azure Pipelines | GitHub Actions | Build & Test | Docker | Kubernetes | SonarQube |
+|-------|:-:|:-:|:-:|:-:|:-:|:-:|
+| .NET Core | Yes | Yes | Yes | - | - | Yes |
+| Java/Gradle | Yes | Yes | Yes | Yes | Yes | Yes |
+| Java/Gradle (Avro) | Yes | Yes | Yes | - | - | - |
+| Angular/npm | Yes | Yes | Yes | Yes | Yes | Optional |
+| Flutter | Yes | Yes | Yes | - | Firebase | Yes |
+| Go | Yes | - | Yes | Yes | Yes | Yes |
+| Java/Maven | Yes | - | Yes | Yes | Yes | Yes |
+| Node.js/TypeScript | Yes | - | Yes | Yes | Yes | Yes |
+| Python | Yes | - | Yes | Yes | Yes | Yes |
 
 ## Repository Structure
 
 ```
+├── .github/workflows/       # CI, changelog, and release workflows for this repo
 ├── azure-pipelines/
-│   ├── pipelines/       # Main pipeline definitions (entry points)
-│   ├── jobs/            # Reusable job templates
+│   ├── pipelines/           # Main pipeline definitions (entry points)
+│   ├── jobs/                # Reusable job templates
 │   │   ├── angular/
 │   │   ├── dotnetcore/
 │   │   ├── flutter/
-│   │   └── java/
-│   └── steps/           # Reusable step templates
-└── github-actions/      # GitHub Actions workflows (early stage)
-    ├── actions/
-    └── jobs/
+│   │   ├── go/
+│   │   ├── java/
+│   │   ├── node/
+│   │   └── python/
+│   └── steps/               # Reusable step templates
+├── github-actions/
+│   ├── actions/             # Composite actions (reusable building blocks)
+│   │   ├── angular/
+│   │   ├── docker-build-push/
+│   │   ├── dotnetcore/
+│   │   ├── finalisation/
+│   │   ├── flutter/
+│   │   ├── java/
+│   │   ├── kube-deploy/
+│   │   ├── semantic-version/
+│   │   └── set-version-file/
+│   └── workflow-templates/  # Full pipeline workflow templates
+└── scripts/                 # Helper scripts (changelog, linting, validation)
 ```
 
 ## How It Works
@@ -45,6 +63,8 @@ Version bumps are driven by PR titles. Include `#VERSION MAJOR`, `#VERSION MINOR
 Versions are stored in a JSON file (`cicd.json` by default) and tagged in git as `branch-major.minor.patch`.
 
 ## Usage
+
+### Azure Pipelines
 
 Reference the templates from your project's pipeline definition:
 
@@ -67,6 +87,21 @@ stages:
       projectFile: 'src/YourProject.csproj'
       jsonFile: 'cicd.json'
 ```
+
+### GitHub Actions
+
+Copy a workflow template from `github-actions/workflow-templates/` into your repo's `.github/workflows/` directory and configure the `env` variables:
+
+```yaml
+# .github/workflows/pipeline.yml — copied from github-actions/workflow-templates/dotnetcore_pipeline.yml
+env:
+  VERSION_INCREMENT: 'patch'
+  SONAR_KEY: 'your-project-key'
+  PROJECT_FILE: 'src/YourProject.csproj'
+  FICHIER_JSON: 'cicd.json'
+```
+
+The workflow templates reference composite actions from this repository (e.g. `jstrullu/cicd/github-actions/actions/semantic-version@master`).
 
 ## Parameters
 
@@ -169,6 +204,16 @@ The templates reference the following Azure DevOps service connections that you 
 | Snyk (`snykConnection`) | Security checks | Dependency vulnerability scanning |
 
 All connection names are parameterized with sensible defaults.
+
+## Repository CI/CD
+
+This repository has its own GitHub Actions workflows:
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **CI** (`ci.yml`) | Push to master, PRs | YAML linting, template validation, changelog check |
+| **Update Changelog** (`changelog.yml`) | Push to master | Auto-generates the `[Unreleased]` section from commit history |
+| **Release** (`release.yml`) | Tag push (`v*`, `*-*.*.*`) | Freezes changelog, creates a GitHub Release with release notes |
 
 ## License
 
