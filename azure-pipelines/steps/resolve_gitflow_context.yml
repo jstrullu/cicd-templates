@@ -13,6 +13,7 @@
 #   shouldTag         — "true" if a git tag should be created
 #   shouldFinalize    — "true" if version commit + push should happen
 #   versionSuffix     — suffix appended to version for pre-releases (e.g. -SNAPSHOT, -rc)
+#   versionIncrement  — resolved bump level for this branch, or "none" to skip bumping
 
 parameters:
   - name: gitFlowType
@@ -23,6 +24,18 @@ parameters:
       - gitflow
       - trunk-based
       - gitlab-flow
+  - name: defaultIncrement
+    type: string
+    default: patch
+  - name: developIncrement
+    type: string
+    default: patch
+  - name: releaseIncrement
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    type: string
+    default: patch
 
 steps:
   - bash: |
@@ -36,6 +49,7 @@ steps:
       SHOULD_TAG="false"
       SHOULD_FINALIZE="false"
       VERSION_SUFFIX=""
+      VERSION_INCREMENT="${{ parameters.defaultIncrement }}"
 
       IS_PR="false"
       if [ "$BUILD_REASON" = "PullRequest" ]; then
@@ -75,22 +89,26 @@ steps:
             DEPLOY_ENV="production"
             SHOULD_TAG="true"
             SHOULD_FINALIZE="true"
+            VERSION_INCREMENT="none"
           elif [ "$BRANCH_NAME" = "develop" ]; then
             SHOULD_DEPLOY="true"
             DEPLOY_ENV="dev"
             SHOULD_FINALIZE="true"
             VERSION_SUFFIX="-SNAPSHOT"
+            VERSION_INCREMENT="${{ parameters.developIncrement }}"
           elif echo "$FULL_BRANCH" | grep -q "^refs/heads/release/"; then
             SHOULD_DEPLOY="true"
             DEPLOY_ENV="staging"
             SHOULD_TAG="true"
             SHOULD_FINALIZE="true"
             VERSION_SUFFIX="-rc"
+            VERSION_INCREMENT="${{ parameters.releaseIncrement }}"
           elif echo "$FULL_BRANCH" | grep -q "^refs/heads/hotfix/"; then
             SHOULD_DEPLOY="true"
             DEPLOY_ENV="staging"
             SHOULD_TAG="true"
             SHOULD_FINALIZE="true"
+            VERSION_INCREMENT="${{ parameters.hotfixIncrement }}"
           fi
           ;;
 
@@ -104,29 +122,33 @@ steps:
           elif [ "$BRANCH_NAME" = "staging" ] || [ "$BRANCH_NAME" = "pre-production" ]; then
             SHOULD_DEPLOY="true"
             DEPLOY_ENV="staging"
+            VERSION_INCREMENT="none"
           elif [ "$BRANCH_NAME" = "production" ]; then
             SHOULD_DEPLOY="true"
             DEPLOY_ENV="production"
             SHOULD_TAG="true"
+            VERSION_INCREMENT="none"
           fi
           ;;
 
       esac
 
       echo "=== Git Flow Context ==="
-      echo "Strategy:     $GIT_FLOW_TYPE"
-      echo "Branch:       $BRANCH_NAME ($FULL_BRANCH)"
-      echo "Is PR:        $IS_PR"
-      echo "shouldDeploy: $SHOULD_DEPLOY"
-      echo "deployEnv:    $DEPLOY_ENV"
-      echo "shouldTag:    $SHOULD_TAG"
+      echo "Strategy:       $GIT_FLOW_TYPE"
+      echo "Branch:         $BRANCH_NAME ($FULL_BRANCH)"
+      echo "Is PR:          $IS_PR"
+      echo "shouldDeploy:   $SHOULD_DEPLOY"
+      echo "deployEnv:      $DEPLOY_ENV"
+      echo "shouldTag:      $SHOULD_TAG"
       echo "shouldFinalize: $SHOULD_FINALIZE"
       echo "versionSuffix:  $VERSION_SUFFIX"
+      echo "versionIncrement: $VERSION_INCREMENT"
 
       echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]$SHOULD_DEPLOY"
       echo "##vso[task.setvariable variable=deployEnvironment;isOutput=true]$DEPLOY_ENV"
       echo "##vso[task.setvariable variable=shouldTag;isOutput=true]$SHOULD_TAG"
       echo "##vso[task.setvariable variable=shouldFinalize;isOutput=true]$SHOULD_FINALIZE"
       echo "##vso[task.setvariable variable=versionSuffix;isOutput=true]$VERSION_SUFFIX"
+      echo "##vso[task.setvariable variable=versionIncrement;isOutput=true]$VERSION_INCREMENT"
     name: gitflow
     displayName: 'Resolve git flow context (${{ parameters.gitFlowType }})'

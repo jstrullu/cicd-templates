@@ -76,6 +76,9 @@ Most templates accept these common parameters:
 |-----------|-------------|---------|
 | `versionIncrement` | Default bump level (`major`, `minor`, `patch`) | `patch` |
 | `gitFlowType` | Git branching strategy (see below) | `github-flow` |
+| `developIncrement` | Version bump for `develop` branch (gitflow only) | `patch` |
+| `releaseIncrement` | Version bump for `release/*` branches (gitflow only) | `minor` |
+| `hotfixIncrement` | Version bump for `hotfix/*` branches (gitflow only) | `patch` |
 | `jsonFile` | Path to the version JSON file | `cicd.json` |
 | `sonarKey` | SonarQube project key | - |
 | `dockerRegistry` | Docker image repository name | - |
@@ -108,24 +111,35 @@ Continuous deployment from a single main branch.
 
 Structured promotion: `master` + `develop` + `release/*` + `hotfix/*`.
 
-| Branch | Build & Test | Deploy | Tag | Version suffix |
-|--------|:-----------:|:------:|:---:|:--------------:|
-| `main`/`master` | Yes | production | Yes | - |
-| `develop` | Yes | dev | - | `-SNAPSHOT` |
-| `release/*` | Yes | staging | Yes | `-rc` |
-| `hotfix/*` | Yes | staging | Yes | - |
-| Feature (PR) | Yes | - | - | - |
+| Branch | Build & Test | Deploy | Tag | Version bump | Version suffix |
+|--------|:-----------:|:------:|:---:|:------------:|:--------------:|
+| `main`/`master` | Yes | production | Yes | none (from merge) | - |
+| `develop` | Yes | dev | - | `developIncrement` | `-SNAPSHOT` |
+| `release/*` | Yes | staging | Yes | `releaseIncrement` | `-rc` |
+| `hotfix/*` | Yes | staging | Yes | `hotfixIncrement` | - |
+| Feature (PR) | Yes | - | - | `versionIncrement` | - |
+
+On `main`/`master`, no version bump occurs — the version comes from the merged `release` or `hotfix` branch. On environment branches like `staging` and `production` in gitlab-flow, the version also propagates without bumping.
 
 ### `gitlab-flow`
 
 Environment branches with promotion: `main` → `staging` → `production`.
 
-| Branch | Build & Test | Deploy | Tag | Version suffix |
-|--------|:-----------:|:------:|:---:|:--------------:|
-| `main`/`master` | Yes | dev | - | - |
-| `staging` | Yes | staging | - | - |
-| `production` | Yes | production | Yes | - |
-| Feature (PR) | Yes | - | - | - |
+| Branch | Build & Test | Deploy | Tag | Version bump | Version suffix |
+|--------|:-----------:|:------:|:---:|:------------:|:--------------:|
+| `main`/`master` | Yes | dev | - | `versionIncrement` | - |
+| `staging` | Yes | staging | - | none (from main) | - |
+| `production` | Yes | production | Yes | none (from main) | - |
+| Feature (PR) | Yes | - | - | `versionIncrement` | - |
+
+### Version Increment Priority
+
+The version bump level is resolved in this order (highest priority first):
+
+1. **PR title** — `#VERSION MAJOR/MINOR/PATCH` in the PR title always wins
+2. **Branch-specific default** — `developIncrement`, `releaseIncrement`, or `hotfixIncrement` for gitflow branches
+3. **Pipeline parameter** — the `versionIncrement` parameter (default: `patch`)
+4. **`none`** — some branches skip bumping entirely (e.g., `master` in gitflow, `staging`/`production` in gitlab-flow)
 
 ### Usage Example
 

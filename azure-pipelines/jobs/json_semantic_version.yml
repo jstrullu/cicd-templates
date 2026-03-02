@@ -8,6 +8,7 @@
 #   Versioning.gitflow.shouldTag         — "true" if a git tag should be created
 #   Versioning.gitflow.shouldFinalize    — "true" if version commit + push should happen
 #   Versioning.gitflow.versionSuffix     — suffix for pre-releases (e.g. -SNAPSHOT, -rc)
+#   Versioning.gitflow.versionIncrement  — resolved bump level, or "none" to skip bumping
 parameters:
   - name: versionIncrement
     type: string
@@ -22,6 +23,15 @@ parameters:
       - gitflow
       - trunk-based
       - gitlab-flow
+  - name: developIncrement
+    type: string
+    default: patch
+  - name: releaseIncrement
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    type: string
+    default: patch
 
 jobs:
   - job: Versioning
@@ -32,9 +42,19 @@ jobs:
     - template: ..\steps\resolve_gitflow_context.yml
       parameters:
         gitFlowType: ${{ parameters.gitFlowType }}
+        defaultIncrement: ${{ parameters.versionIncrement }}
+        developIncrement: ${{ parameters.developIncrement }}
+        releaseIncrement: ${{ parameters.releaseIncrement }}
+        hotfixIncrement: ${{ parameters.hotfixIncrement }}
     - template: ..\steps\set_version_increment.yml
       parameters:
         versionIncrement: ${{ parameters.versionIncrement }}
+    # Apply git flow branch-specific increment when PR title did not override
+    - bash: |
+        echo "Applying git flow increment: $(gitflow.versionIncrement)"
+        echo "##vso[task.setvariable variable=versionIncrement;]$(gitflow.versionIncrement)"
+      displayName: 'Apply git flow version increment'
+      condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'), ne(variables['gitflow.versionIncrement'], ''), eq(variables['versionIncrementFromPR'], ''))
     - task: shellexec@0
       displayName: Create file ${{ parameters.jsonFile }} if it does not exist
       inputs:
@@ -57,6 +77,12 @@ jobs:
       inputs:
         filename: sh
         arguments: -c "echo \"##vso[task.setvariable variable=releaseVersion;]`semver $(cicd_version) -i $(versionIncrement)`\"
+      condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'))
+    - bash: |
+        echo "No version bump — using existing version: $(cicd_version)"
+        echo "##vso[task.setvariable variable=releaseVersion;]$(cicd_version)"
+      displayName: 'Use existing version (no bump)'
+      condition: and(succeeded(), eq(variables['gitflow.versionIncrement'], 'none'))
     - bash: |
         VERSION="$(releaseVersion)"
         SUFFIX="$(gitflow.versionSuffix)"

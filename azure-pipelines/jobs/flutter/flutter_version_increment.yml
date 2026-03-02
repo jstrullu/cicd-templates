@@ -13,6 +13,15 @@ parameters:
       - gitflow
       - trunk-based
       - gitlab-flow
+  - name: developIncrement
+    type: string
+    default: patch
+  - name: releaseIncrement
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    type: string
+    default: patch
 
 jobs:
   - job: Versioning
@@ -22,6 +31,10 @@ jobs:
       - template: ..\..\steps\resolve_gitflow_context.yml
         parameters:
           gitFlowType: ${{ parameters.gitFlowType }}
+          defaultIncrement: ${{ parameters.versionIncrement }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
       - task: FlutterInstall@0
         displayName: 'Flutter Install'
         inputs:
@@ -43,12 +56,25 @@ jobs:
         inputs:
           projectDirectory: './src/'
           arguments: 'pub global activate cider'
+      # Apply git flow branch-specific increment when PR title did not override
+      - bash: |
+          echo "Applying git flow increment: $(gitflow.versionIncrement)"
+          echo "##vso[task.setvariable variable=versionIncrement;]$(gitflow.versionIncrement)"
+        displayName: 'Apply git flow version increment'
+        condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'), ne(variables['gitflow.versionIncrement'], ''), eq(variables['versionIncrementFromPR'], ''))
       - bash: |
             echo $(versionIncrement)
             export PATH="$PATH":"$HOME/.pub-cache/bin"
             cd /home/vsts/work/1/s/src/
             VERSION_TAG=`cider bump $(versionIncrement)` && echo "##vso[task.setvariable variable=releaseVersion]$VERSION_TAG"
         displayName: 'Version bump'
+        condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'))
+      - bash: |
+            export PATH="$PATH":"$HOME/.pub-cache/bin"
+            cd /home/vsts/work/1/s/src/
+            VERSION_TAG=`cider version` && echo "##vso[task.setvariable variable=releaseVersion]$VERSION_TAG"
+        displayName: 'Use existing version (no bump)'
+        condition: and(succeeded(), eq(variables['gitflow.versionIncrement'], 'none'))
 
       - bash: |
           git config --global user.email "ci-service@example.com"

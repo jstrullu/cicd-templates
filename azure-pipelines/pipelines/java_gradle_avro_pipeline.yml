@@ -21,6 +21,18 @@ parameters:
       - gitflow
       - trunk-based
       - gitlab-flow
+  - name: developIncrement
+    displayName: Version increment for develop branch (gitflow)
+    type: string
+    default: patch
+  - name: releaseIncrement
+    displayName: Version increment for release branches (gitflow)
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    displayName: Version increment for hotfix branches (gitflow)
+    type: string
+    default: patch
   - name: gradlePath
     type: string
   - name: javaVersion
@@ -34,6 +46,9 @@ stages:
           versionIncrement: ${{ parameters.versionIncrement }}
           jsonFile: ${{ parameters.jsonFile }}
           gitFlowType: ${{ parameters.gitFlowType }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
   - stage: Build
     dependsOn: Initialization
     variables:

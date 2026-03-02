@@ -14,6 +14,18 @@ parameters:
       - gitflow
       - trunk-based
       - gitlab-flow
+  - name: developIncrement
+    displayName: Version increment for develop branch (gitflow)
+    type: string
+    default: patch
+  - name: releaseIncrement
+    displayName: Version increment for release branches (gitflow)
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    displayName: Version increment for hotfix branches (gitflow)
+    type: string
+    default: patch
   - name: sonarKey
     type: string
 
@@ -25,6 +37,9 @@ stages:
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           gitFlowType: ${{ parameters.gitFlowType }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
 
   - stage: DeployDev
     displayName: 'Deploy to Firebase Dev'
