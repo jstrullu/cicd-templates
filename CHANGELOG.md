@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add configurable git flow strategy to initialization stage
 
 ### Changed
+- Merge pull request #6 from jstrullu/claude/read-code-init-memory-MOceZ
+- Replace expression with GITHUB_BASE_REF env var in CI workflow
 - Merge pull request #5 Add GitHub Actions CI and auto-changelog workflows
 - Merge pull request #4
 - Move Finalization stage after Deploy in all pipelines
@@ -31,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Translate French variable names, identifiers, and comments to English
 - démarrage github
 - creation du dossier azure pipelines
+
+### Fixed
+- Fix CI workflow by moving sed logic to external script
+- Fix GitHub Actions workflow expression parsing error
+
+### Documentation
+- auto-update CHANGELOG.md [skip ci]
 
 
 ## [0.1.0] - Initial release
