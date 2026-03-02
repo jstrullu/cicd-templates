@@ -1,0 +1,99 @@
+parameters:
+  - name: sonarKey
+    type: string
+    default: ''
+  - name: pythonVersion
+    type: string
+    default: '3.12'
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+  - name: sonarConnection
+    type: string
+    default: Sonar
+  - name: requirementsFile
+    type: string
+    default: requirements.txt
+  - name: testDirectory
+    type: string
+    default: tests
+
+jobs:
+  - job: Build_Test
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: UsePythonVersion@0
+      displayName: 'Use Python ${{ parameters.pythonVersion }}'
+      inputs:
+        versionSpec: '${{ parameters.pythonVersion }}'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ parameters.requirementsFile }}
+      displayName: 'Install dependencies'
+
+    - script: |
+        pip install pytest pytest-cov pytest-junitxml
+      displayName: 'Install test dependencies'
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubePrepare@5
+        displayName: 'Prepare Sonar'
+        inputs:
+          SonarQube: '${{ parameters.sonarConnection }}'
+          scannerMode: 'CLI'
+          configMode: 'manual'
+          cliProjectKey: ${{ parameters.sonarKey }}
+          cliSources: '.'
+          cliProjectName: $(Build.Repository.Name)
+          extraProperties: |
+            sonar.python.coverage.reportPaths=**/coverage.xml
+            sonar.python.xunit.reportPath=**/test-results.xml
+            sonar.projectVersion=${{ parameters.projectVersion }}
+
+    - script: |
+        python -m pytest ${{ parameters.testDirectory }} \
+          --junitxml=test-results.xml \
+          --cov=. \
+          --cov-report=xml:coverage.xml \
+          --cov-report=html:coveragereport
+      displayName: 'Run tests with coverage'
+      continueOnError: false
+
+    - task: PublishTestResults@2
+      displayName: 'Publish Test Results'
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results.xml'
+        testRunTitle: 'Python Unit Tests'
+        mergeTestResults: true
+      condition: succeededOrFailed()
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish code coverage'
+      inputs:
+        codeCoverageTool: Cobertura
+        summaryFileLocation: '**/coverage.xml'
+        reportDirectory: './coveragereport'
+
+    - ${{ if ne(parameters.sonarKey, '') }}:
+      - task: SonarQubeAnalyze@5
+        displayName: 'Sonar analysis'
+      - task: SonarQubePublish@5
+        displayName: 'Sonar publish'
+        inputs:
+          pollingTimeoutSec: '300'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)'
+        artifact: 'drop'
+        publishLocation: 'pipeline'

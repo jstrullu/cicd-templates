@@ -43,7 +43,18 @@ jobs:
             # replace the old line with the <AssemblyVersion> tag with a new one
             (Get-Content $ProjectFile) | Foreach-Object {$_ -replace '$(assemblyLine)', $NewAssemblyVersionLine} | Set-Content $ProjectFile
         condition: eq('${{parameters.language}}', '.net')
-      
+
+      - script: |
+          if [ -f pyproject.toml ]; then
+            sed -i "s/^version = \".*\"/version = \"${{ parameters.releaseVersion }}\"/" pyproject.toml
+          elif [ -f setup.cfg ]; then
+            sed -i "s/^version = .*/version = ${{ parameters.releaseVersion }}/" setup.cfg
+          elif [ -f setup.py ]; then
+            sed -i "s/version=['\"].*['\"]/version='${{ parameters.releaseVersion }}'/" setup.py
+          fi
+        displayName: 'Update Python version'
+        condition: eq('${{parameters.language}}', 'python')
+
       - bash: |
           git config --global user.email "ci-service@example.com"
           git config --global user.name "CI Service"
