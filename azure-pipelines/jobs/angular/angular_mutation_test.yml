@@ -1,0 +1,35 @@
+parameters:
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
+
+jobs:
+  - job: MutationTest
+    displayName: 'Mutation Testing (Stryker)'
+    steps:
+      - checkout: self
+        clean: true
+        persistCredentials: true
+
+      - task: NodeTool@0
+        inputs:
+          versionSpec: '18.x'
+        displayName: 'Install Node.js'
+
+      - script: |
+          npm install -g @angular/cli
+          npm install
+        displayName: 'Install dependencies'
+
+      - script: npx stryker run
+        displayName: 'Run mutation tests'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Publish mutation report'
+        inputs:
+          targetPath: '$(Build.SourcesDirectory)/reports/mutation'
+          artifact: 'mutation-report'
+          publishLocation: 'pipeline'
+        condition: succeededOrFailed()

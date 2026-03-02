@@ -51,6 +51,10 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -77,6 +81,13 @@ stages:
           jsonFile: ${{ parameters.jsonFile }}
           mavenGoals: ${{ parameters.mavenGoals }}
           pomFile: ${{ parameters.pomFile }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/java/java_maven_mutation_test.yml
+          parameters:
+            javaVersion: ${{ parameters.javaVersion }}
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
+            pomFile: ${{ parameters.pomFile }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

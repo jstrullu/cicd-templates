@@ -1,0 +1,54 @@
+parameters:
+  - name: pythonVersion
+    type: string
+    default: '3.12'
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
+  - name: requirementsFile
+    type: string
+    default: requirements.txt
+  - name: testDirectory
+    type: string
+    default: tests
+
+jobs:
+  - job: MutationTest
+    displayName: 'Mutation Testing (mutmut)'
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: UsePythonVersion@0
+      displayName: 'Use Python ${{ parameters.pythonVersion }}'
+      inputs:
+        versionSpec: '${{ parameters.pythonVersion }}'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ parameters.requirementsFile }}
+      displayName: 'Install dependencies'
+
+    - script: |
+        pip install mutmut
+      displayName: 'Install mutmut'
+
+    - script: |
+        mutmut run --paths-to-mutate=. --tests-dir=${{ parameters.testDirectory }} --no-progress || true
+        mutmut html
+      displayName: 'Run mutation tests'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish mutation report'
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)/html'
+        artifact: 'mutation-report'
+        publishLocation: 'pipeline'
+      condition: succeededOrFailed()

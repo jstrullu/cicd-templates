@@ -1,0 +1,51 @@
+parameters:
+  - name: nodeVersion
+    type: string
+    default: '20.x'
+  - name: projectVersion
+    type: string
+  - name: jsonFile
+    type: string
+    default: 'cicd.json'
+  - name: packageManager
+    type: string
+    default: npm
+    values:
+      - npm
+      - yarn
+
+jobs:
+  - job: MutationTest
+    displayName: 'Mutation Testing (Stryker)'
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+    - template: ..\..\steps\set_version_file.yml
+      parameters:
+        jsonFile: ${{ parameters.jsonFile }}
+        releaseVersion: ${{ parameters.projectVersion }}
+
+    - task: NodeTool@0
+      displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
+      inputs:
+        versionSpec: '${{ parameters.nodeVersion }}'
+
+    - script: npm ci
+      displayName: 'Install dependencies (npm)'
+      condition: eq('${{ parameters.packageManager }}', 'npm')
+
+    - script: yarn install --frozen-lockfile
+      displayName: 'Install dependencies (yarn)'
+      condition: eq('${{ parameters.packageManager }}', 'yarn')
+
+    - script: npx stryker run
+      displayName: 'Run mutation tests'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish mutation report'
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)/reports/mutation'
+        artifact: 'mutation-report'
+        publishLocation: 'pipeline'
+      condition: succeededOrFailed()

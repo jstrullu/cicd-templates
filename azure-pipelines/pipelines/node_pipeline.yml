@@ -59,6 +59,10 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -86,6 +90,13 @@ stages:
           testScript: ${{ parameters.testScript }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/node/node_mutation_test.yml
+          parameters:
+            nodeVersion: ${{ parameters.nodeVersion }}
+            packageManager: ${{ parameters.packageManager }}
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

@@ -40,6 +40,10 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -63,6 +67,11 @@ stages:
           sonarKey: ${{ parameters.sonarKey }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/angular/angular_mutation_test.yml
+          parameters:
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
 
   - stage: Lint
     dependsOn:

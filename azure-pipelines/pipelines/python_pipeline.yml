@@ -52,6 +52,10 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  - name: enableMutationTesting
+    displayName: Enable mutation testing
+    type: boolean
+    default: false
 
 stages:
   - stage: Initialization
@@ -78,6 +82,14 @@ stages:
           jsonFile: ${{ parameters.jsonFile }}
           requirementsFile: ${{ parameters.requirementsFile }}
           testDirectory: ${{ parameters.testDirectory }}
+      - ${{ if eq(parameters.enableMutationTesting, true) }}:
+        - template: /jobs/python/python_mutation_test.yml
+          parameters:
+            pythonVersion: ${{ parameters.pythonVersion }}
+            projectVersion: $(version)
+            jsonFile: ${{ parameters.jsonFile }}
+            requirementsFile: ${{ parameters.requirementsFile }}
+            testDirectory: ${{ parameters.testDirectory }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
