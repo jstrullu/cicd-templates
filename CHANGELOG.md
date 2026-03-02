@@ -15,10 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `none` version increment for promotion branches (gitflow `master`, gitlab-flow `staging`/`production`)
 - Dynamic deploy environment selection based on git flow context
 - `shouldTag` parameter on `finalisation.yml` for conditional tagging
+- Mutation testing job templates for all languages (`enableMutationTesting` parameter, default `false`):
+  Stryker.NET, mutmut, go-mutesting, PITest (Gradle & Maven), Stryker Mutator (Node.js & Angular)
+- GitHub Actions CI workflow: YAML lint, template convention validation, changelog check on PRs
+- GitHub Actions changelog workflow: auto-update `CHANGELOG.md` on merge to master
+- `scripts/validate_templates.py` — checks parameters have `type`, no hardcoded IPs/emails, job/stage structure
+- `scripts/generate_changelog.py` — generates changelog from conventional commit messages
+- `.yamllint.yml` configuration for Azure Pipelines YAML linting
 - Community files: CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, issue and PR templates
 - MIT LICENSE, README.md, .gitignore
 
 ### Changed
+- Finalization stage now always runs last (after Deploy) in all pipelines
 - All pipeline stage conditions now use git flow context outputs instead of hardcoded PR checks
 - Docker registry connection parameterized (`containerRegistry`) — was hardcoded
 - Insecure registry URL parameterized (`insecureRegistryUrl`) — was hardcoded
