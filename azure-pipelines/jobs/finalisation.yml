@@ -22,15 +22,15 @@ jobs:
       
       - task: NodeTool@0
         inputs:
-          versionSpec: '18.x'
+          versionSpec: '20.x'
         displayName: 'Install Node.js'
-        condition: eq('${{parameters.language}}', 'angular')
+        condition: or(eq('${{parameters.language}}', 'angular'), eq('${{parameters.language}}', 'node'))
 
       - script: |
           npm ci
           npm version ${{ parameters.releaseVersion }} --no-git-tag-version
-        displayName: 'Update version'
-        condition: eq('${{parameters.language}}', 'angular')
+        displayName: 'Update Node/Angular version'
+        condition: or(eq('${{parameters.language}}', 'angular'), eq('${{parameters.language}}', 'node'))
 
       - task: PowerShell@2
         displayName: 'Assembly Version Generation'
