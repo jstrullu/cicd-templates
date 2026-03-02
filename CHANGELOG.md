@@ -8,37 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Configurable git flow strategies (`github-flow`, `gitflow`, `trunk-based`, `gitlab-flow`) via `gitFlowType` pipeline parameter
-- Branch-specific version increments for gitflow (`developIncrement`, `releaseIncrement`, `hotfixIncrement`)
-- `resolve_gitflow_context.yml` step template that outputs deployment, tagging, and versioning decisions
-- Version suffix support for pre-release builds (`-SNAPSHOT`, `-rc`)
-- `none` version increment for promotion branches (gitflow `master`, gitlab-flow `staging`/`production`)
-- Dynamic deploy environment selection based on git flow context
-- `shouldTag` parameter on `finalisation.yml` for conditional tagging
-- Mutation testing job templates for all languages (`enableMutationTesting` parameter, default `false`):
-  Stryker.NET, mutmut, go-mutesting, PITest (Gradle & Maven), Stryker Mutator (Node.js & Angular)
-- GitHub Actions CI workflow: YAML lint, template convention validation, changelog check on PRs
-- GitHub Actions changelog workflow: auto-update `CHANGELOG.md` on merge to master
-- `scripts/validate_templates.py` — checks parameters have `type`, no hardcoded IPs/emails, job/stage structure
-- `scripts/generate_changelog.py` — generates changelog from conventional commit messages
-- `.yamllint.yml` configuration for Azure Pipelines YAML linting
-- Community files: CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, issue and PR templates
-- MIT LICENSE, README.md, .gitignore
+- Add GitHub Actions CI and auto-changelog workflows
+- Add mutation testing support for all languages
+- Add Docker build and Kubernetes deploy stages to .NET Core pipeline
+- adding more languages
+- Add Java Maven pipeline template
+- Add Go pipeline template
+- Add Node.js/TypeScript pipeline template
+- Add Python pipeline template
+- Add community and governance files for public repository
+- Add per-branch version increment for each git flow strategy
+- Add configurable git flow strategy to initialization stage
 
 ### Changed
-- Finalization stage now always runs last (after Deploy) in all pipelines
-- All pipeline stage conditions now use git flow context outputs instead of hardcoded PR checks
-- Docker registry connection parameterized (`containerRegistry`) — was hardcoded
-- Insecure registry URL parameterized (`insecureRegistryUrl`) — was hardcoded
-- All service connection names parameterized with defaults (`sonarConnection`, `snykConnection`, `reposConnection`)
-- Kubernetes resource/namespace uses `appName` parameter — was hardcoded
-- Deploy stage renamed from `Deploy_To_Dev` to `Deploy` with dynamic environment
-- Git user email/name replaced with generic `ci-service@example.com`
+- Merge pull request #5 Add GitHub Actions CI and auto-changelog workflows
+- Merge pull request #4
+- Move Finalization stage after Deploy in all pipelines
+- Skip SonarQube steps when sonarKey is not provided
+- turning into public repo
+- Prepare repository for public release
+- Merge pull request #1 from jstrullu/claude/read-code-init-memory-MOceZ
+- Translate French variable names, identifiers, and comments to English
+- démarrage github
+- creation du dossier azure pipelines
 
-### Removed
-- Hardcoded internal IP address from Docker build job
-- Hardcoded company email addresses
-- Hardcoded internal project names
 
 ## [0.1.0] - Initial release
 
