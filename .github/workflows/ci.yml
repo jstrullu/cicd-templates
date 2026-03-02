@@ -20,9 +20,8 @@ jobs:
         run: |
           exit_code=0
           for file in $(find azure-pipelines -name '*.yml'); do
-            # Replace Azure Pipelines expressions with placeholders so yamllint
-            # can parse the file.  Expressions like ${{ ... }} and $[ ... ] are
-            # not valid YAML and would cause false-positive errors.
+            # Replace Azure Pipelines template expressions with placeholders
+            # so yamllint can parse the file without false-positive errors.
             sed \
               -e 's/\${{[^}]*}}/PLACEHOLDER/g' \
               -e 's/\$\[[^]]*\]/PLACEHOLDER/g' \
