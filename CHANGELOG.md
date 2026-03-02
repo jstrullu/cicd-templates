@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add configurable git flow strategy to initialization stage
 
 ### Changed
+- Port Azure Pipelines templates to GitHub Actions
 - Merge pull request #6 from jstrullu/claude/read-code-init-memory-MOceZ
 - Replace expression with GITHUB_BASE_REF env var in CI workflow
 - Merge pull request #5 Add GitHub Actions CI and auto-changelog workflows
@@ -39,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix GitHub Actions workflow expression parsing error
 
 ### Documentation
+- auto-update CHANGELOG.md [skip ci]
 - auto-update CHANGELOG.md [skip ci]
 
 
