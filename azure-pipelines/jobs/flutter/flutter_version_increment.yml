@@ -5,12 +5,36 @@ parameters:
   - name: pubspecFile
     type: string
     default: /**/pubspec.yaml
+  - name: gitFlowType
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
+  - name: developIncrement
+    type: string
+    default: patch
+  - name: releaseIncrement
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    type: string
+    default: patch
 
 jobs:
   - job: Versioning
     steps:
       - checkout: self
         persistCredentials: true
+      - template: ..\..\steps\resolve_gitflow_context.yml
+        parameters:
+          gitFlowType: ${{ parameters.gitFlowType }}
+          defaultIncrement: ${{ parameters.versionIncrement }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
       - task: FlutterInstall@0
         displayName: 'Flutter Install'
         inputs:
@@ -32,41 +56,54 @@ jobs:
         inputs:
           projectDirectory: './src/'
           arguments: 'pub global activate cider'
+      # Apply git flow branch-specific increment when PR title did not override
+      - bash: |
+          echo "Applying git flow increment: $(gitflow.versionIncrement)"
+          echo "##vso[task.setvariable variable=versionIncrement;]$(gitflow.versionIncrement)"
+        displayName: 'Apply git flow version increment'
+        condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'), ne(variables['gitflow.versionIncrement'], ''), eq(variables['versionIncrementFromPR'], ''))
       - bash: |
             echo $(versionIncrement)
             export PATH="$PATH":"$HOME/.pub-cache/bin"
             cd /home/vsts/work/1/s/src/
             VERSION_TAG=`cider bump $(versionIncrement)` && echo "##vso[task.setvariable variable=releaseVersion]$VERSION_TAG"
         displayName: 'Version bump'
+        condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'))
+      - bash: |
+            export PATH="$PATH":"$HOME/.pub-cache/bin"
+            cd /home/vsts/work/1/s/src/
+            VERSION_TAG=`cider version` && echo "##vso[task.setvariable variable=releaseVersion]$VERSION_TAG"
+        displayName: 'Use existing version (no bump)'
+        condition: and(succeeded(), eq(variables['gitflow.versionIncrement'], 'none'))
 
       - bash: |
-          git config --global user.email "technique@kuenta.fr"
-          git config --global user.name "Service Technique"
+          git config --global user.email "ci-service@example.com"
+          git config --global user.name "CI Service"
         displayName: 'Set Git User'
       - task: CmdLine@1
         displayName: 'Version commit'
         inputs:
           filename: git
           arguments: 'commit -am "***NO_CI*** Set release version to $(releaseVersion)"'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
       - task: CmdLine@1
         displayName: 'Version tag'
         inputs:
           filename: git
           arguments: 'tag -fa $(Build.SourceBranchName)-$(releaseVersion) -m $(releaseVersion)'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldTag'], 'true'))
       - task: CmdLine@1
         displayName: 'Commit and tag push'
         inputs:
           filename: git
           arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
       - task: CmdLine@1
         displayName: 'Pipeline name update'
         inputs:
           filename: sh
           arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
-        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+        condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
       - task: CmdLine@1
         displayName: 'Pullrequest pipeline name update'
         inputs:

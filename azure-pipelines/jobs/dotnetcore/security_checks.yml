@@ -1,13 +1,16 @@
 parameters:
   - name: targetFile
     type: string
+  - name: snykConnection
+    type: string
+    default: Snyk Security
 
 jobs:
   - job: Security
     steps:
       - task: SnykSecurityScan@1
         inputs:
-          serviceConnectionEndpoint: 'Snyk Security'
+          serviceConnectionEndpoint: '${{ parameters.snykConnection }}'
           testType: 'app'
           monitorWhen: 'always'
           failOnIssues: false

@@ -5,6 +5,9 @@
     type: string
   - name: projectVersion
     type: string
+  - name: sonarConnection
+    type: string
+    default: Sonar
 
 jobs:
   - job: BuildAndTest
@@ -24,7 +27,7 @@ jobs:
         displayName: 'Prepare Sonar'
         continueOnError: true
         inputs:
-          SonarQube: 'Sonar'
+          SonarQube: '${{ parameters.sonarConnection }}'
           scannerMode: 'MSBuild'
           projectKey: ${{ parameters.sonarProjectKey }}
           projectName: $(Build.Repository.Name)

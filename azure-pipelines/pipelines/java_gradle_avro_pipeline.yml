@@ -12,6 +12,27 @@ parameters:
   - name: versionIncrement
     type: string
     default: 'patch'
+  - name: gitFlowType
+    displayName: Git flow strategy
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
+  - name: developIncrement
+    displayName: Version increment for develop branch (gitflow)
+    type: string
+    default: patch
+  - name: releaseIncrement
+    displayName: Version increment for release branches (gitflow)
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    displayName: Version increment for hotfix branches (gitflow)
+    type: string
+    default: patch
   - name: gradlePath
     type: string
   - name: javaVersion
@@ -24,6 +45,10 @@ stages:
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           jsonFile: ${{ parameters.jsonFile }}
+          gitFlowType: ${{ parameters.gitFlowType }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
   - stage: Build
     dependsOn: Initialization
     variables:
@@ -35,7 +60,7 @@ stages:
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
   - stage: Publish_Artifact
-    dependsOn: 
+    dependsOn:
       - Initialization
       - Build
     variables:
@@ -48,15 +73,17 @@ stages:
           jsonFile: ${{ parameters.jsonFile }}
 
   - stage: Finalization
-    condition: ne(variables['Build.Reason'], 'PullRequest')
-    dependsOn: 
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
       - Initialization
       - Build
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
     jobs:
       - template: /jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
           language: 'java'
+          shouldTag: $(shouldTag)

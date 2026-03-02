@@ -1,6 +1,9 @@
 parameters:
   - name: sonarKey
     type: string
+  - name: sonarConnection
+    type: string
+    default: Sonar
 
 jobs:
   - job: BuildAndTest
@@ -42,7 +45,7 @@ jobs:
       - task: SonarQubePrepare@5
         displayName: 'Prepare Sonar'
         inputs:
-          SonarQube: 'Sonar'
+          SonarQube: '${{ parameters.sonarConnection }}'
           scannerMode: 'CLI'
           configMode: 'manual'
           cliProjectKey: ${{ parameters.sonarKey }}

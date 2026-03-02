@@ -12,6 +12,27 @@ parameters:
   - name: versionIncrement
     type: string
     default: 'patch'
+  - name: gitFlowType
+    displayName: Git flow strategy
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
+  - name: developIncrement
+    displayName: Version increment for develop branch (gitflow)
+    type: string
+    default: patch
+  - name: releaseIncrement
+    displayName: Version increment for release branches (gitflow)
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    displayName: Version increment for hotfix branches (gitflow)
+    type: string
+    default: patch
   - name: gradlePath
     type: string
   - name: sonarKey
@@ -19,6 +40,8 @@ parameters:
   - name: javaVersion
     type: string
   - name: dockerRegistry
+    type: string
+  - name: containerRegistry
     type: string
 
 stages:
@@ -28,6 +51,10 @@ stages:
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           jsonFile: ${{ parameters.jsonFile }}
+          gitFlowType: ${{ parameters.gitFlowType }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
   - stage: Build_And_Test
     dependsOn: Initialization
     variables:
@@ -40,45 +67,49 @@ stages:
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
   - stage: Docker_Build_And_Publish
-    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-    dependsOn: 
+    dependsOn:
       - Initialization
       - Build_And_Test
     jobs:
       - template: /jobs/docker_build_and_publish.yml
         parameters:
           registry: ${{ parameters.dockerRegistry }}
+          containerRegistry: ${{ parameters.containerRegistry }}
           projectVersion: $(version)
 
   - stage: Finalization
-    condition: ne(variables['Build.Reason'], 'PullRequest')
-    dependsOn: 
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
       - Initialization
       - Build_And_Test
       - Docker_Build_And_Publish
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
     jobs:
       - template: /jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
           language: 'java'
+          shouldTag: $(shouldTag)
 
-  - stage: Deploy_To_Dev
-    condition: ne(variables['Build.Reason'], 'PullRequest')
-    dependsOn: 
+  - stage: Deploy
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+    dependsOn:
       - Initialization
       - Build_And_Test
       - Docker_Build_And_Publish
     variables:
       BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
     jobs:
       - template: /jobs/kube_deploy.yml
         parameters:
-          env: "Dev"
-          resource: "tracker-immo"
-          namespace: "tracker-immo"
+          env: $(deployEnv)
+          resource: ${{ parameters.appName }}
+          namespace: ${{ parameters.appName }}
     
