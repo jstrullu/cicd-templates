@@ -7,41 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Add GitHub Actions CI and auto-changelog workflows
-- Add mutation testing support for all languages
-- Add Docker build and Kubernetes deploy stages to .NET Core pipeline
-- adding more languages
-- Add Java Maven pipeline template
-- Add Go pipeline template
-- Add Node.js/TypeScript pipeline template
-- Add Python pipeline template
-- Add community and governance files for public repository
-- Add per-branch version increment for each git flow strategy
-- Add configurable git flow strategy to initialization stage
-
 ### Changed
-- Port Azure Pipelines templates to GitHub Actions
-- Merge pull request #6 from jstrullu/claude/read-code-init-memory-MOceZ
-- Replace expression with GITHUB_BASE_REF env var in CI workflow
-- Merge pull request #5 Add GitHub Actions CI and auto-changelog workflows
-- Merge pull request #4
-- Move Finalization stage after Deploy in all pipelines
-- Skip SonarQube steps when sonarKey is not provided
-- turning into public repo
-- Prepare repository for public release
-- Merge pull request #1 from jstrullu/claude/read-code-init-memory-MOceZ
-- Translate French variable names, identifiers, and comments to English
-- démarrage github
-- creation du dossier azure pipelines
-
-### Fixed
-- Fix CI workflow by moving sed logic to external script
-- Fix GitHub Actions workflow expression parsing error
-
-### Documentation
-- auto-update CHANGELOG.md [skip ci]
-- auto-update CHANGELOG.md [skip ci]
+- use PAT_TOKEN to bypass branch protection in changelog workflows
 
 
 ## [0.1.0] - Initial release
