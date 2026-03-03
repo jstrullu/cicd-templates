@@ -48,6 +48,14 @@ parameters:
     displayName: Enable mutation testing
     type: boolean
     default: false
+  - name: enableSecurityChecks
+    displayName: Enable security checks
+    type: boolean
+    default: false
+  - name: securityTargetFile
+    displayName: Target file for Snyk (e.g. *.csproj)
+    type: string
+    default: ''
 
 stages:
   - stage: Initialization
@@ -79,6 +87,14 @@ stages:
             projectFile: ${{ parameters.projectFile }}
             projectVersion: $(version)
             jsonFile: ${{ parameters.jsonFile }}
+
+  - ${{ if eq(parameters.enableSecurityChecks, true) }}:
+    - stage: Security_Checks
+      dependsOn: Initialization
+      jobs:
+        - template: /jobs/dotnetcore/security_checks.yml
+          parameters:
+            targetFile: ${{ parameters.securityTargetFile }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

@@ -29,6 +29,14 @@ parameters:
   - name: sonarKey
     type: string
     default: ''
+  - name: enableSecurityChecks
+    displayName: Enable security checks
+    type: boolean
+    default: false
+  - name: securityTargetFile
+    displayName: Target file for Snyk (e.g. pubspec.yaml)
+    type: string
+    default: 'pubspec.yaml'
 
 stages:
   - stage: Initialization
@@ -41,6 +49,14 @@ stages:
           developIncrement: ${{ parameters.developIncrement }}
           releaseIncrement: ${{ parameters.releaseIncrement }}
           hotfixIncrement: ${{ parameters.hotfixIncrement }}
+
+  - ${{ if eq(parameters.enableSecurityChecks, true) }}:
+    - stage: Security_Checks
+      dependsOn: Initialization
+      jobs:
+        - template: /azure-pipelines/jobs/flutter/security_checks.yml
+          parameters:
+            targetFile: ${{ parameters.securityTargetFile }}
 
   - stage: DeployDev
     displayName: 'Deploy to Firebase Dev'

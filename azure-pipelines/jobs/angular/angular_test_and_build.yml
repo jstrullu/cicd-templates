@@ -17,18 +17,20 @@ jobs:
       
       - task: NodeTool@0
         inputs:
-          versionSpec: '18.x'
+          versionSpec: '20.x'
         displayName: 'Install Node.js'
         
-      # - task: SonarQubePrepare@5
-      #   inputs:
-      #     SonarQube: 'Sonar'
-      #     scannerMode: 'CLI'
-      #     configMode: 'manual'
-      #     cliProjectKey: ${{ parameters.sonarKey }}
-      #     cliSources: 'src'
-      #     extraProperties: |
-      #       sonar.projectVersion=${{ parameters.projectVersion }}
+      - ${{ if ne(parameters.sonarKey, '') }}:
+        - task: SonarQubePrepare@5
+          displayName: 'Prepare Sonar'
+          inputs:
+            SonarQube: 'Sonar'
+            scannerMode: 'CLI'
+            configMode: 'manual'
+            cliProjectKey: ${{ parameters.sonarKey }}
+            cliSources: 'src'
+            extraProperties: |
+              sonar.projectVersion=${{ parameters.projectVersion }}
 
       - script: |
           npm install -g @angular/cli
@@ -47,18 +49,16 @@ jobs:
           npm run build
         displayName: Build
 
-      # - script: |
-      #     ng test --watch=false --browsers ChromeHeadless
-      #   displayName: 'Run Angular tests'
-
-      # - task: SonarQubeAnalyze@5
+      - ${{ if ne(parameters.sonarKey, '') }}:
+        - task: SonarQubeAnalyze@5
+          displayName: 'Sonar analysis'
+        - task: SonarQubePublish@5
+          displayName: 'Publish sonar'
+          inputs:
+            pollingTimeoutSec: '300'
 
       - task: PublishPipelineArtifact@1
         inputs:
           targetPath: '$(Build.SourcesDirectory)'
           artifact: 'drop'
           publishLocation: 'pipeline'
-
-      # - task: SonarQubePublish@5
-      #   inputs:
-      #     pollingTimeoutSec: '300'

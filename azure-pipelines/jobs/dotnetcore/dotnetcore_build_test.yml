@@ -37,7 +37,6 @@ jobs:
       - ${{ if ne(parameters.sonarProjectKey, '') }}:
         - task: SonarQubePrepare@5
           displayName: 'Prepare Sonar'
-          continueOnError: true
           inputs:
             SonarQube: '${{ parameters.sonarConnection }}'
             scannerMode: 'MSBuild'
@@ -86,10 +85,8 @@ jobs:
       - ${{ if ne(parameters.sonarProjectKey, '') }}:
         - task: SonarQubeAnalyze@5
           displayName: 'Sonar analysis'
-          continueOnError: true
         - task: SonarQubePublish@5
           displayName: 'Publish sonar'
-          continueOnError: true
           inputs:
             pollingTimeoutSec: '300'
       - task: reportgenerator@5

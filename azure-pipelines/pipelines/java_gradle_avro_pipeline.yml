@@ -37,6 +37,14 @@ parameters:
     type: string
   - name: javaVersion
     type: string
+  - name: enableSecurityChecks
+    displayName: Enable security checks
+    type: boolean
+    default: false
+  - name: securityTargetFile
+    displayName: Target file for Snyk (e.g. build.gradle)
+    type: string
+    default: 'build.gradle'
 
 stages:
   - stage: Initialization
@@ -49,6 +57,14 @@ stages:
           developIncrement: ${{ parameters.developIncrement }}
           releaseIncrement: ${{ parameters.releaseIncrement }}
           hotfixIncrement: ${{ parameters.hotfixIncrement }}
+  - ${{ if eq(parameters.enableSecurityChecks, true) }}:
+    - stage: Security_Checks
+      dependsOn: Initialization
+      jobs:
+        - template: /jobs/java/security_checks.yml
+          parameters:
+            targetFile: ${{ parameters.securityTargetFile }}
+
   - stage: Build
     dependsOn: Initialization
     variables:
