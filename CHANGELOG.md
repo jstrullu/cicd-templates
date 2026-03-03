@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.1] - 2026-03-03
+## [0.8.2] - 2026-03-03
 
-### Documentation
-- update README with security checks, optional SonarQube, and missing actions
+### Added
+- add dependency caching, timeouts, mutation testing parity, and artifact retention
 
 
 ## [0.7.0] - 2026-03-03
