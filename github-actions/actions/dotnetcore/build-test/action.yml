@@ -4,7 +4,8 @@ description: 'Restore, build, test, analyse SonarQube et couverture de code pour
 inputs:
   sonar-project-key:
     description: 'Clé du projet SonarQube'
-    required: true
+    required: false
+    default: ''
   project-file:
     description: 'Chemin du fichier .csproj principal'
     required: true
@@ -13,10 +14,12 @@ inputs:
     required: true
   sonar-host-url:
     description: 'URL du serveur SonarQube'
-    required: true
+    required: false
+    default: ''
   sonar-token:
     description: 'Token d''authentification SonarQube'
-    required: true
+    required: false
+    default: ''
   dotnet-version:
     description: 'Version du SDK .NET'
     required: false
@@ -38,10 +41,12 @@ runs:
         fi
 
     - name: Installation de dotnet-sonarscanner
+      if: inputs.sonar-project-key != ''
       shell: bash
       run: dotnet tool install --global dotnet-sonarscanner || true
 
     - name: SonarQube Begin
+      if: inputs.sonar-project-key != ''
       shell: bash
       env:
         SONAR_TOKEN: ${{ inputs.sonar-token }}
@@ -79,6 +84,7 @@ runs:
           --collect "Code coverage" || true
 
     - name: SonarQube End
+      if: inputs.sonar-project-key != ''
       shell: bash
       env:
         SONAR_TOKEN: ${{ inputs.sonar-token }}

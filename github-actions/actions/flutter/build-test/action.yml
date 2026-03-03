@@ -4,13 +4,16 @@ description: 'Build web, tests, analyse SonarQube et couverture de code pour les
 inputs:
   sonar-key:
     description: 'Clé du projet SonarQube'
-    required: true
+    required: false
+    default: ''
   sonar-host-url:
     description: 'URL du serveur SonarQube'
-    required: true
+    required: false
+    default: ''
   sonar-token:
     description: 'Token d''authentification SonarQube'
-    required: true
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -41,12 +44,14 @@ runs:
         echo "image-tag=${branch_name}-${{ steps.version.outputs.release-version }}" >> "$GITHUB_OUTPUT"
 
     - name: Installation de Java 11
+      if: inputs.sonar-key != ''
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '11'
 
     - name: SonarQube Scan
+      if: inputs.sonar-key != ''
       uses: SonarSource/sonarqube-scan-action@v5
       env:
         SONAR_TOKEN: ${{ inputs.sonar-token }}
