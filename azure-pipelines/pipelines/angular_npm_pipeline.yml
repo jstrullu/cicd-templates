@@ -44,6 +44,14 @@ parameters:
     displayName: Enable mutation testing
     type: boolean
     default: false
+  - name: enableSecurityChecks
+    displayName: Enable security checks
+    type: boolean
+    default: false
+  - name: securityTargetFile
+    displayName: Target file for Snyk (e.g. package.json)
+    type: string
+    default: 'package.json'
 
 stages:
   - stage: Initialization
@@ -83,6 +91,14 @@ stages:
       - template: /jobs/angular/angular_linter.yml
         parameters:
           projectVersion: $(version)
+
+  - ${{ if eq(parameters.enableSecurityChecks, true) }}:
+    - stage: Security_Checks
+      dependsOn: Initialization
+      jobs:
+        - template: /jobs/angular/security_checks.yml
+          parameters:
+            targetFile: ${{ parameters.securityTargetFile }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

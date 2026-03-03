@@ -8,6 +8,12 @@ parameters:
   - name: shouldTag
     type: string
     default: 'true'
+  - name: gitUserEmail
+    type: string
+    default: 'ci-service@example.com'
+  - name: gitUserName
+    type: string
+    default: 'CI Service'
 
 jobs:
   - job: Finalization
@@ -61,8 +67,8 @@ jobs:
         condition: eq('${{parameters.language}}', 'maven')
 
       - bash: |
-          git config --global user.email "ci-service@example.com"
-          git config --global user.name "CI Service"
+          git config --global user.email "${{ parameters.gitUserEmail }}"
+          git config --global user.name "${{ parameters.gitUserName }}"
         displayName: Set Git User
       - task: CmdLine@1
         displayName: Commit version

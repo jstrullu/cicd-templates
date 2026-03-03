@@ -1,6 +1,6 @@
-# Pipeline Java Gradle — Copier dans .github/workflows/ du repo consommateur
+# Pipeline Java Maven — Copier dans .github/workflows/ du repo consommateur
 # Variables à configurer dans la section env ci-dessous
-name: Java Gradle Pipeline
+name: Java Maven Pipeline
 
 on:
   push:
@@ -13,6 +13,8 @@ env:
   FICHIER_JSON: 'cicd.json'
   SONAR_KEY: ''               # Clé du projet SonarQube
   JAVA_VERSION: '17'
+  POM_FILE: 'pom.xml'
+  MAVEN_GOALS: 'clean verify'
   DOCKER_REGISTRY: ''         # Adresse du registry Docker (ex: ghcr.io/org)
   KUBE_NAMESPACE: ''          # Namespace Kubernetes cible
 
@@ -38,13 +40,15 @@ jobs:
     needs: initialisation
     steps:
       - uses: actions/checkout@v4
-      - name: Build & Test Java Gradle
-        uses: jstrullu/cicd/github-actions/actions/java/gradle-build-test@master
+      - name: Build & Test Java Maven
+        uses: jstrullu/cicd/github-actions/actions/java/maven-build-test@master
         with:
-          sonar-key: ${{ env.SONAR_KEY }}
           java-version: ${{ env.JAVA_VERSION }}
+          pom-file: ${{ env.POM_FILE }}
+          maven-goals: ${{ env.MAVEN_GOALS }}
           project-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}
+          sonar-key: ${{ env.SONAR_KEY }}
           sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
           sonar-token: ${{ secrets.SONAR_TOKEN }}
 
@@ -57,7 +61,7 @@ jobs:
       - name: Vérifications de sécurité
         uses: jstrullu/cicd/github-actions/actions/java/security-checks@master
         with:
-          target-file: 'build.gradle'
+          target-file: ${{ env.POM_FILE }}
           snyk-token: ${{ secrets.SNYK_TOKEN }}
 
   docker-build-and-publish:
@@ -78,21 +82,6 @@ jobs:
           registry-username: ${{ secrets.DOCKER_USERNAME }}
           registry-password: ${{ secrets.DOCKER_PASSWORD }}
 
-  finalisation:
-    runs-on: ubuntu-latest
-    needs: [initialisation, build-and-test, docker-build-and-publish]
-    if: github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Finalisation
-        uses: jstrullu/cicd/github-actions/actions/finalisation@master
-        with:
-          release-version: ${{ needs.initialisation.outputs.version }}
-          fichier-json: ${{ env.FICHIER_JSON }}
-          language: 'java'
-
   deploy-to-dev:
     runs-on: ubuntu-latest
     needs: [initialisation, build-and-test, docker-build-and-publish]
@@ -107,3 +96,18 @@ jobs:
         with:
           namespace: ${{ env.KUBE_NAMESPACE }}
           kubeconfig: ${{ secrets.KUBECONFIG }}
+
+  finalisation:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-test, docker-build-and-publish]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Finalisation
+        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        with:
+          release-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          language: 'maven'

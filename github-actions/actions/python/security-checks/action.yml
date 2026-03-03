@@ -1,0 +1,47 @@
+name: 'Vérifications de sécurité Python'
+description: 'Analyse de sécurité Snyk et pip-audit pour les projets Python'
+
+inputs:
+  target-file:
+    description: 'Fichier cible pour l''analyse Snyk (ex: requirements.txt)'
+    required: true
+    default: 'requirements.txt'
+  snyk-token:
+    description: 'Token d''authentification Snyk'
+    required: true
+  python-version:
+    description: 'Version de Python'
+    required: false
+    default: '3.12'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Installation de Snyk CLI
+      shell: bash
+      run: npm install -g snyk
+
+    - name: Authentification Snyk
+      shell: bash
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
+      run: snyk auth "$SNYK_TOKEN"
+
+    - name: Analyse de sécurité Snyk
+      shell: bash
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
+      run: |
+        snyk test --file="${{ inputs.target-file }}" || true
+        snyk monitor --file="${{ inputs.target-file }}" || true
+
+    - name: pip-audit
+      shell: bash
+      run: |
+        pip install pip-audit
+        pip-audit -r "${{ inputs.target-file }}" || true

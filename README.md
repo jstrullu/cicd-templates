@@ -11,10 +11,10 @@ Reusable CI/CD pipeline templates for **Azure Pipelines** and **GitHub Actions**
 | Java/Gradle (Avro) | Yes | Yes | Yes | - | - | - |
 | Angular/npm | Yes | Yes | Yes | Yes | Yes | Optional |
 | Flutter | Yes | Yes | Yes | - | Firebase | Yes |
-| Go | Yes | - | Yes | Yes | Yes | Yes |
-| Java/Maven | Yes | - | Yes | Yes | Yes | Yes |
-| Node.js/TypeScript | Yes | - | Yes | Yes | Yes | Yes |
-| Python | Yes | - | Yes | Yes | Yes | Yes |
+| Go | Yes | Yes | Yes | Yes | Yes | Yes |
+| Java/Maven | Yes | Yes | Yes | Yes | Yes | Yes |
+| Node.js/TypeScript | Yes | Yes | Yes | Yes | Yes | Yes |
+| Python | Yes | Yes | Yes | Yes | Yes | Yes |
 
 ## Repository Structure
 
@@ -61,6 +61,15 @@ Each pipeline follows a common multi-stage pattern:
 Version bumps are driven by PR titles. Include `#VERSION MAJOR`, `#VERSION MINOR`, or `#VERSION PATCH` in your PR title to control the bump level. Defaults to `patch` if not specified.
 
 Versions are stored in a JSON file (`cicd.json` by default) and tagged in git as `branch-major.minor.patch`.
+
+## Getting Started
+
+1. Create a `cicd.json` file at the root of your consumer repository:
+   ```json
+   {"version": "0.0.0"}
+   ```
+2. Choose your platform (Azure Pipelines or GitHub Actions) and tech stack.
+3. Configure your pipeline using the examples below or the [detailed consumer examples](docs/consumer-example.md).
 
 ## Usage
 
@@ -214,6 +223,12 @@ This repository has its own GitHub Actions workflows:
 | **CI** (`ci.yml`) | Push to master, PRs | YAML linting, template validation, changelog check |
 | **Update Changelog** (`changelog.yml`) | Push to master | Auto-generates the `[Unreleased]` section from commit history |
 | **Release** (`release.yml`) | Tag push (`v*`, `*-*.*.*`) | Freezes changelog, creates a GitHub Release with release notes |
+
+## Documentation
+
+- [Consumer Repository Examples](docs/consumer-example.md) — Detailed per-stack setup examples
+- [Troubleshooting Guide](docs/troubleshooting.md) — Common issues and solutions
+- [Migration Guide: Azure to GitHub](docs/migration-azure-to-github.md) — Step-by-step migration checklist
 
 ## License
 

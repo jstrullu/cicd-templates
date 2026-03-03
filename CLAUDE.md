@@ -14,8 +14,8 @@ azure-pipelines/
   jobs/        → Reusable job templates, organized by tech stack
   steps/       → Reusable step templates (versioning helpers)
 github-actions/
-  actions/     → GitHub Actions workflow definitions (WIP, only .NET Core started)
-  jobs/        → Reusable job templates for GitHub Actions
+  actions/             → Composite actions (reusable building blocks per stack)
+  workflow-templates/  → Full pipeline workflow templates (copied into consumer repos)
 ```
 
 ## Architecture
@@ -40,14 +40,18 @@ The `set_version_increment` step inspects the PR title for a `#VERSION` keyword 
 | .NET Core | `dotnetcore_pipeline.yml` | `dotnetcore_build_test.yml`, `security_checks.yml` (Snyk) |
 | Java/Gradle | `java_gradle_pipeline.yml` | `java_gradle_test_and_build.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
 | Java/Gradle Avro | `java_gradle_avro_pipeline.yml` | `java_gradle_avro_build.yml`, `gradle_package_publish.yml` |
+| Java/Maven | `java_maven_pipeline.yml` | `java_maven_test_and_build.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
 | Angular/npm | `angular_npm_pipeline.yml` | `angular_test_and_build.yml`, `angular_linter.yml` |
 | Flutter | `flutter_pipeline.yml` | `flutter_version_increment.yml`, `flutter_build_test.yml`, `flutter_build_firebase_deploy.yml` |
+| Go | `go_pipeline.yml` | `go_build_test.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
+| Node.js/TypeScript | `node_pipeline.yml` | `node_build_test.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
+| Python | `python_pipeline.yml` | `python_build_test.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
 
 ### Cross-cutting jobs
 
 - `docker_build_and_publish.yml` — Builds and pushes Docker images to a registry.
 - `kube_deploy.yml` — Deploys to Kubernetes using manifests from the consumer repo's `.kube/` directory with token replacement.
-- `finalisation.yml` — Language-aware version commit and git tag push. Handles Angular (`npm version`), .NET (`AssemblyVersion` in .csproj), and Java/Flutter (via `cicd.json` only).
+- `finalisation.yml` — Language-aware version commit and git tag push. Handles Angular/Node (`npm version`), .NET (`AssemblyVersion` in .csproj), Python (`pyproject.toml`/`setup.cfg`/`setup.py`), Maven (`pom.xml` via `mvn versions:set`), and Java/Flutter/Go (via `cicd.json` only).
 
 ## Conventions
 
@@ -56,5 +60,5 @@ The `set_version_increment` step inspects the PR title for a `#VERSION` keyword 
 - **Version persistence**: All stacks (except Flutter, which uses `pubspec.yaml` via Cider) store version in `cicd.json` at the consumer repo root.
 - **PR builds**: Docker, deploy, and finalisation stages are conditionally skipped for pull request builds.
 - **SonarQube**: Integrated into all build jobs. Some Angular/Flutter Sonar tasks are currently commented out.
-- **Node.js 18.x** is used across all stacks that need Node.
-- **GitHub Actions**: Currently incomplete — only a skeleton for .NET Core exists under `github-actions/`.
+- **Node.js 20.x** is used across all stacks that need Node.
+- **GitHub Actions**: All 9 stacks ported — composite actions and workflow templates available for every stack.

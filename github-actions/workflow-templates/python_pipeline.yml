@@ -1,6 +1,6 @@
-# Pipeline Java Gradle — Copier dans .github/workflows/ du repo consommateur
+# Pipeline Python — Copier dans .github/workflows/ du repo consommateur
 # Variables à configurer dans la section env ci-dessous
-name: Java Gradle Pipeline
+name: Python Pipeline
 
 on:
   push:
@@ -12,7 +12,9 @@ env:
   VERSION_INCREMENT: 'patch'
   FICHIER_JSON: 'cicd.json'
   SONAR_KEY: ''               # Clé du projet SonarQube
-  JAVA_VERSION: '17'
+  PYTHON_VERSION: '3.12'
+  REQUIREMENTS_FILE: 'requirements.txt'
+  TEST_DIRECTORY: 'tests'
   DOCKER_REGISTRY: ''         # Adresse du registry Docker (ex: ghcr.io/org)
   KUBE_NAMESPACE: ''          # Namespace Kubernetes cible
 
@@ -38,13 +40,15 @@ jobs:
     needs: initialisation
     steps:
       - uses: actions/checkout@v4
-      - name: Build & Test Java Gradle
-        uses: jstrullu/cicd/github-actions/actions/java/gradle-build-test@master
+      - name: Build & Test Python
+        uses: jstrullu/cicd/github-actions/actions/python/build-test@master
         with:
-          sonar-key: ${{ env.SONAR_KEY }}
-          java-version: ${{ env.JAVA_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          requirements-file: ${{ env.REQUIREMENTS_FILE }}
+          test-directory: ${{ env.TEST_DIRECTORY }}
           project-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}
+          sonar-key: ${{ env.SONAR_KEY }}
           sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
           sonar-token: ${{ secrets.SONAR_TOKEN }}
 
@@ -55,10 +59,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Vérifications de sécurité
-        uses: jstrullu/cicd/github-actions/actions/java/security-checks@master
+        uses: jstrullu/cicd/github-actions/actions/python/security-checks@master
         with:
-          target-file: 'build.gradle'
+          target-file: ${{ env.REQUIREMENTS_FILE }}
           snyk-token: ${{ secrets.SNYK_TOKEN }}
+          python-version: ${{ env.PYTHON_VERSION }}
 
   docker-build-and-publish:
     runs-on: ubuntu-latest
@@ -78,21 +83,6 @@ jobs:
           registry-username: ${{ secrets.DOCKER_USERNAME }}
           registry-password: ${{ secrets.DOCKER_PASSWORD }}
 
-  finalisation:
-    runs-on: ubuntu-latest
-    needs: [initialisation, build-and-test, docker-build-and-publish]
-    if: github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Finalisation
-        uses: jstrullu/cicd/github-actions/actions/finalisation@master
-        with:
-          release-version: ${{ needs.initialisation.outputs.version }}
-          fichier-json: ${{ env.FICHIER_JSON }}
-          language: 'java'
-
   deploy-to-dev:
     runs-on: ubuntu-latest
     needs: [initialisation, build-and-test, docker-build-and-publish]
@@ -107,3 +97,18 @@ jobs:
         with:
           namespace: ${{ env.KUBE_NAMESPACE }}
           kubeconfig: ${{ secrets.KUBECONFIG }}
+
+  finalisation:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-test, docker-build-and-publish]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Finalisation
+        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        with:
+          release-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          language: 'python'

@@ -1,0 +1,18 @@
+parameters:
+  - name: targetFile
+    type: string
+    default: 'build.gradle'
+  - name: snykConnection
+    type: string
+    default: Snyk Security
+
+jobs:
+  - job: Security
+    steps:
+      - task: SnykSecurityScan@1
+        inputs:
+          serviceConnectionEndpoint: '${{ parameters.snykConnection }}'
+          testType: 'app'
+          monitorWhen: 'always'
+          failOnIssues: false
+          targetFile: ${{ parameters.targetFile }}

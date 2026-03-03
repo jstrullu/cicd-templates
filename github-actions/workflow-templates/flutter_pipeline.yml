@@ -27,6 +27,8 @@ jobs:
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
 
+  # Flutter n'a pas de vérification Snyk dédiée — les dépendances pub sont gérées par Flutter lui-même
+
   deploy-dev:
     runs-on: ubuntu-latest
     needs: initialisation

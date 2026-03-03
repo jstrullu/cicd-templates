@@ -1,0 +1,31 @@
+parameters:
+  - name: targetFile
+    type: string
+    default: 'go.mod'
+  - name: snykConnection
+    type: string
+    default: Snyk Security
+  - name: goVersion
+    type: string
+    default: '1.22'
+
+jobs:
+  - job: Security
+    steps:
+      - task: GoTool@0
+        displayName: 'Use Go ${{ parameters.goVersion }}'
+        inputs:
+          version: '${{ parameters.goVersion }}'
+
+      - task: SnykSecurityScan@1
+        inputs:
+          serviceConnectionEndpoint: '${{ parameters.snykConnection }}'
+          testType: 'app'
+          monitorWhen: 'always'
+          failOnIssues: false
+          targetFile: ${{ parameters.targetFile }}
+
+      - script: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./... || true
+        displayName: 'govulncheck'

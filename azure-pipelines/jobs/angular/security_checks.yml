@@ -1,0 +1,26 @@
+parameters:
+  - name: targetFile
+    type: string
+    default: 'package.json'
+  - name: snykConnection
+    type: string
+    default: Snyk Security
+
+jobs:
+  - job: Security
+    steps:
+      - task: SnykSecurityScan@1
+        inputs:
+          serviceConnectionEndpoint: '${{ parameters.snykConnection }}'
+          testType: 'app'
+          monitorWhen: 'always'
+          failOnIssues: false
+          targetFile: ${{ parameters.targetFile }}
+
+      - task: NodeTool@0
+        inputs:
+          versionSpec: '20.x'
+        displayName: 'Install Node.js'
+
+      - script: npm audit --omit=dev || true
+        displayName: 'npm audit'

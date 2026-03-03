@@ -1,0 +1,86 @@
+name: 'Build & Test Java Maven'
+description: 'Build Maven, tests avec JaCoCo et analyse SonarQube optionnelle pour les projets Java Maven'
+
+inputs:
+  java-version:
+    description: 'Version de Java'
+    required: true
+  maven-goals:
+    description: 'Goals Maven'
+    required: false
+    default: 'clean verify'
+  maven-options:
+    description: 'Options Maven supplémentaires'
+    required: false
+    default: '-B -ntp'
+  pom-file:
+    description: 'Chemin du fichier POM'
+    required: false
+    default: 'pom.xml'
+  project-version:
+    description: 'Version du projet'
+    required: true
+  fichier-json:
+    description: 'Fichier JSON de version'
+    required: false
+    default: 'cicd.json'
+  sonar-key:
+    description: 'Clé du projet SonarQube (vide = pas de Sonar)'
+    required: false
+    default: ''
+  sonar-host-url:
+    description: 'URL du serveur SonarQube'
+    required: false
+    default: ''
+  sonar-token:
+    description: 'Token SonarQube'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Mise à jour du fichier de version
+      uses: jstrullu/cicd/github-actions/actions/set-version-file@master
+      with:
+        fichier-json: ${{ inputs.fichier-json }}
+        release-version: ${{ inputs.project-version }}
+
+    - name: Installation de Java ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java-version }}
+
+    - name: Mise à jour de la version POM
+      shell: bash
+      run: |
+        mvn versions:set ${{ inputs.maven-options }} \
+          -f ${{ inputs.pom-file }} \
+          -DnewVersion=${{ inputs.project-version }} \
+          -DgenerateBackupPoms=false
+
+    - name: Build et tests
+      shell: bash
+      run: |
+        mvn ${{ inputs.maven-goals }} ${{ inputs.maven-options }} \
+          -f ${{ inputs.pom-file }}
+
+    - name: Analyse SonarQube
+      if: inputs.sonar-key != ''
+      shell: bash
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+      run: |
+        mvn sonar:sonar ${{ inputs.maven-options }} \
+          -f ${{ inputs.pom-file }} \
+          -Dsonar.projectKey=${{ inputs.sonar-key }} \
+          -Dsonar.host.url=${{ inputs.sonar-host-url }} \
+          -Dsonar.token=${{ inputs.sonar-token }}
+
+    - name: Upload de l'artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: drop
+        path: ${{ github.workspace }}

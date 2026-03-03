@@ -1,6 +1,6 @@
-# Pipeline Java Gradle — Copier dans .github/workflows/ du repo consommateur
+# Pipeline Node.js/TypeScript — Copier dans .github/workflows/ du repo consommateur
 # Variables à configurer dans la section env ci-dessous
-name: Java Gradle Pipeline
+name: Node.js Pipeline
 
 on:
   push:
@@ -12,7 +12,10 @@ env:
   VERSION_INCREMENT: 'patch'
   FICHIER_JSON: 'cicd.json'
   SONAR_KEY: ''               # Clé du projet SonarQube
-  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+  PACKAGE_MANAGER: 'npm'      # npm ou yarn
+  BUILD_SCRIPT: 'build'
+  TEST_SCRIPT: 'test'
   DOCKER_REGISTRY: ''         # Adresse du registry Docker (ex: ghcr.io/org)
   KUBE_NAMESPACE: ''          # Namespace Kubernetes cible
 
@@ -38,13 +41,16 @@ jobs:
     needs: initialisation
     steps:
       - uses: actions/checkout@v4
-      - name: Build & Test Java Gradle
-        uses: jstrullu/cicd/github-actions/actions/java/gradle-build-test@master
+      - name: Build & Test Node.js
+        uses: jstrullu/cicd/github-actions/actions/node/build-test@master
         with:
-          sonar-key: ${{ env.SONAR_KEY }}
-          java-version: ${{ env.JAVA_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager: ${{ env.PACKAGE_MANAGER }}
+          build-script: ${{ env.BUILD_SCRIPT }}
+          test-script: ${{ env.TEST_SCRIPT }}
           project-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}
+          sonar-key: ${{ env.SONAR_KEY }}
           sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
           sonar-token: ${{ secrets.SONAR_TOKEN }}
 
@@ -55,9 +61,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Vérifications de sécurité
-        uses: jstrullu/cicd/github-actions/actions/java/security-checks@master
+        uses: jstrullu/cicd/github-actions/actions/node/security-checks@master
         with:
-          target-file: 'build.gradle'
+          target-file: 'package.json'
           snyk-token: ${{ secrets.SNYK_TOKEN }}
 
   docker-build-and-publish:
@@ -78,21 +84,6 @@ jobs:
           registry-username: ${{ secrets.DOCKER_USERNAME }}
           registry-password: ${{ secrets.DOCKER_PASSWORD }}
 
-  finalisation:
-    runs-on: ubuntu-latest
-    needs: [initialisation, build-and-test, docker-build-and-publish]
-    if: github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Finalisation
-        uses: jstrullu/cicd/github-actions/actions/finalisation@master
-        with:
-          release-version: ${{ needs.initialisation.outputs.version }}
-          fichier-json: ${{ env.FICHIER_JSON }}
-          language: 'java'
-
   deploy-to-dev:
     runs-on: ubuntu-latest
     needs: [initialisation, build-and-test, docker-build-and-publish]
@@ -107,3 +98,18 @@ jobs:
         with:
           namespace: ${{ env.KUBE_NAMESPACE }}
           kubeconfig: ${{ secrets.KUBECONFIG }}
+
+  finalisation:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-test, docker-build-and-publish]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Finalisation
+        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        with:
+          release-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          language: 'node'

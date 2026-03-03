@@ -1,0 +1,110 @@
+name: 'Build & Test Node.js'
+description: 'Installation des dépendances, build, tests avec couverture et analyse SonarQube optionnelle pour les projets Node.js/TypeScript'
+
+inputs:
+  node-version:
+    description: 'Version de Node.js'
+    required: false
+    default: '20'
+  package-manager:
+    description: 'Gestionnaire de paquets (npm ou yarn)'
+    required: false
+    default: 'npm'
+  build-script:
+    description: 'Nom du script de build'
+    required: false
+    default: 'build'
+  test-script:
+    description: 'Nom du script de test'
+    required: false
+    default: 'test'
+  project-version:
+    description: 'Version du projet'
+    required: true
+  fichier-json:
+    description: 'Fichier JSON de version'
+    required: false
+    default: 'cicd.json'
+  sonar-key:
+    description: 'Clé du projet SonarQube (vide = pas de Sonar)'
+    required: false
+    default: ''
+  sonar-host-url:
+    description: 'URL du serveur SonarQube'
+    required: false
+    default: ''
+  sonar-token:
+    description: 'Token SonarQube'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Mise à jour du fichier de version
+      uses: jstrullu/cicd/github-actions/actions/set-version-file@master
+      with:
+        fichier-json: ${{ inputs.fichier-json }}
+        release-version: ${{ inputs.project-version }}
+
+    - name: Installation de Node.js ${{ inputs.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Installation des dépendances (npm)
+      if: inputs.package-manager == 'npm'
+      shell: bash
+      run: npm ci
+
+    - name: Installation des dépendances (yarn)
+      if: inputs.package-manager == 'yarn'
+      shell: bash
+      run: yarn install --frozen-lockfile
+
+    - name: Mise à jour de la version package.json
+      shell: bash
+      run: npm version ${{ inputs.project-version }} --no-git-tag-version
+
+    - name: Build (npm)
+      if: inputs.package-manager == 'npm'
+      shell: bash
+      run: npm run ${{ inputs.build-script }}
+
+    - name: Build (yarn)
+      if: inputs.package-manager == 'yarn'
+      shell: bash
+      run: yarn ${{ inputs.build-script }}
+
+    - name: Tests avec couverture (npm)
+      if: inputs.package-manager == 'npm'
+      shell: bash
+      run: npm run ${{ inputs.test-script }} -- --ci --coverage --reporters=default --reporters=jest-junit
+      env:
+        JEST_JUNIT_OUTPUT_DIR: test-results
+
+    - name: Tests avec couverture (yarn)
+      if: inputs.package-manager == 'yarn'
+      shell: bash
+      run: yarn ${{ inputs.test-script }} --ci --coverage --reporters=default --reporters=jest-junit
+      env:
+        JEST_JUNIT_OUTPUT_DIR: test-results
+
+    - name: Analyse SonarQube
+      if: inputs.sonar-key != ''
+      uses: SonarSource/sonarqube-scan-action@v3
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+      with:
+        args: >
+          -Dsonar.projectKey=${{ inputs.sonar-key }}
+          -Dsonar.sources=src
+          -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+          -Dsonar.projectVersion=${{ inputs.project-version }}
+
+    - name: Upload de l'artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: drop
+        path: ${{ github.workspace }}

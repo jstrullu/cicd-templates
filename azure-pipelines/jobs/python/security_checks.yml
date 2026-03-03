@@ -1,0 +1,31 @@
+parameters:
+  - name: targetFile
+    type: string
+    default: 'requirements.txt'
+  - name: snykConnection
+    type: string
+    default: Snyk Security
+  - name: pythonVersion
+    type: string
+    default: '3.12'
+
+jobs:
+  - job: Security
+    steps:
+      - task: UsePythonVersion@0
+        displayName: 'Use Python ${{ parameters.pythonVersion }}'
+        inputs:
+          versionSpec: '${{ parameters.pythonVersion }}'
+
+      - task: SnykSecurityScan@1
+        inputs:
+          serviceConnectionEndpoint: '${{ parameters.snykConnection }}'
+          testType: 'app'
+          monitorWhen: 'always'
+          failOnIssues: false
+          targetFile: ${{ parameters.targetFile }}
+
+      - script: |
+          pip install pip-audit
+          pip-audit -r ${{ parameters.targetFile }} || true
+        displayName: 'pip-audit'

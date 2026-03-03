@@ -1,5 +1,5 @@
 name: 'Finalisation'
-description: 'Commit de version, tag git et push. Gère Angular (npm version), .NET (AssemblyVersion dans .csproj) et Java/Flutter (cicd.json uniquement).'
+description: 'Commit de version, tag git et push. Gère Angular/Node (npm version), .NET (AssemblyVersion dans .csproj), Python (pyproject.toml/setup.cfg/setup.py), Maven (pom.xml) et Java/Flutter/Go (cicd.json uniquement).'
 
 inputs:
   release-version:
@@ -10,12 +10,20 @@ inputs:
     required: true
     default: 'cicd.json'
   language:
-    description: 'Langage du projet (angular, .net, java, flutter)'
+    description: 'Langage du projet (angular, node, .net, java, flutter, go, python, maven)'
     required: true
   project-file:
     description: 'Chemin du fichier .csproj (requis pour .net)'
     required: false
     default: ''
+  git-user-email:
+    description: 'Email pour les commits Git'
+    required: false
+    default: 'ci-service@example.com'
+  git-user-name:
+    description: 'Nom pour les commits Git'
+    required: false
+    default: 'CI Service'
 
 runs:
   using: 'composite'
@@ -26,14 +34,14 @@ runs:
         fichier-json: ${{ inputs.fichier-json }}
         release-version: ${{ inputs.release-version }}
 
-    - name: Installation de Node.js 18
-      if: inputs.language == 'angular'
+    - name: Installation de Node.js 20
+      if: inputs.language == 'angular' || inputs.language == 'node'
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
 
-    - name: Mise à jour de la version Angular
-      if: inputs.language == 'angular'
+    - name: Mise à jour de la version Angular/Node
+      if: inputs.language == 'angular' || inputs.language == 'node'
       shell: bash
       run: |
         npm ci
@@ -47,11 +55,29 @@ runs:
           sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${{ inputs.release-version }}</AssemblyVersion>|g" "${{ inputs.project-file }}"
         fi
 
+    - name: Mise à jour de la version Python
+      if: inputs.language == 'python'
+      shell: bash
+      run: |
+        if [ -f pyproject.toml ]; then
+          sed -i "s/^version = \".*\"/version = \"${{ inputs.release-version }}\"/" pyproject.toml
+        elif [ -f setup.cfg ]; then
+          sed -i "s/^version = .*/version = ${{ inputs.release-version }}/" setup.cfg
+        elif [ -f setup.py ]; then
+          sed -i "s/version=['\"].*['\"]/version='${{ inputs.release-version }}'/" setup.py
+        fi
+
+    - name: Mise à jour de la version Maven
+      if: inputs.language == 'maven'
+      shell: bash
+      run: |
+        mvn versions:set -B -ntp -DnewVersion=${{ inputs.release-version }} -DgenerateBackupPoms=false
+
     - name: Configuration Git
       shell: bash
       run: |
-        git config --global user.email "service@slhtech.fr"
-        git config --global user.name "Service"
+        git config --global user.email "${{ inputs.git-user-email }}"
+        git config --global user.name "${{ inputs.git-user-name }}"
 
     - name: Commit de la version
       shell: bash

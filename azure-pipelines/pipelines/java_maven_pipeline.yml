@@ -55,6 +55,14 @@ parameters:
     displayName: Enable mutation testing
     type: boolean
     default: false
+  - name: enableSecurityChecks
+    displayName: Enable security checks
+    type: boolean
+    default: false
+  - name: securityTargetFile
+    displayName: Target file for Snyk (e.g. pom.xml)
+    type: string
+    default: 'pom.xml'
 
 stages:
   - stage: Initialization
@@ -88,6 +96,14 @@ stages:
             projectVersion: $(version)
             jsonFile: ${{ parameters.jsonFile }}
             pomFile: ${{ parameters.pomFile }}
+
+  - ${{ if eq(parameters.enableSecurityChecks, true) }}:
+    - stage: Security_Checks
+      dependsOn: Initialization
+      jobs:
+        - template: /jobs/java/security_checks.yml
+          parameters:
+            targetFile: ${{ parameters.securityTargetFile }}
 
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

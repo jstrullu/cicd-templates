@@ -6,6 +6,14 @@ inputs:
     description: 'Niveau de bump (patch, minor, major)'
     required: false
     default: 'patch'
+  git-user-email:
+    description: 'Email pour les commits Git'
+    required: false
+    default: 'ci-service@example.com'
+  git-user-name:
+    description: 'Nom pour les commits Git'
+    required: false
+    default: 'CI Service'
 
 outputs:
   release-version:
@@ -63,8 +71,8 @@ runs:
       if: github.event_name != 'pull_request'
       shell: bash
       run: |
-        git config --global user.email "service@slhtech.fr"
-        git config --global user.name "Service"
+        git config --global user.email "${{ inputs.git-user-email }}"
+        git config --global user.name "${{ inputs.git-user-name }}"
 
     - name: Commit de la version
       if: github.event_name != 'pull_request'

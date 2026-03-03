@@ -1,0 +1,96 @@
+name: 'Build & Test Go'
+description: 'Build, vet, test avec couverture et analyse SonarQube optionnelle pour les projets Go'
+
+inputs:
+  go-version:
+    description: 'Version de Go'
+    required: false
+    default: '1.22'
+  project-version:
+    description: 'Version du projet'
+    required: true
+  fichier-json:
+    description: 'Fichier JSON de version'
+    required: false
+    default: 'cicd.json'
+  build-flags:
+    description: 'Cible de build Go'
+    required: false
+    default: './...'
+  test-flags:
+    description: 'Flags pour go test'
+    required: false
+    default: '-v -race -coverprofile=coverage.out -covermode=atomic ./...'
+  sonar-key:
+    description: 'Clé du projet SonarQube (vide = pas de Sonar)'
+    required: false
+    default: ''
+  sonar-host-url:
+    description: 'URL du serveur SonarQube'
+    required: false
+    default: ''
+  sonar-token:
+    description: 'Token SonarQube'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Mise à jour du fichier de version
+      uses: jstrullu/cicd/github-actions/actions/set-version-file@master
+      with:
+        fichier-json: ${{ inputs.fichier-json }}
+        release-version: ${{ inputs.project-version }}
+
+    - name: Installation de Go ${{ inputs.go-version }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Téléchargement des dépendances
+      shell: bash
+      run: go mod download
+
+    - name: Vet
+      shell: bash
+      run: go vet ./...
+
+    - name: Build
+      shell: bash
+      run: |
+        go build -ldflags "-X main.version=${{ inputs.project-version }}" ${{ inputs.build-flags }}
+
+    - name: Tests avec couverture
+      shell: bash
+      run: |
+        go test ${{ inputs.test-flags }} 2>&1 | tee test-output.txt
+        go install github.com/jstemmer/go-junit-report/v2@latest
+        cat test-output.txt | go-junit-report -set-exit-code > test-report.xml
+
+    - name: Conversion couverture en Cobertura
+      if: always()
+      shell: bash
+      run: |
+        go install github.com/boumenot/gocover-cobertura@latest
+        gocover-cobertura < coverage.out > coverage.xml || true
+
+    - name: Analyse SonarQube
+      if: inputs.sonar-key != ''
+      uses: SonarSource/sonarqube-scan-action@v3
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+      with:
+        args: >
+          -Dsonar.projectKey=${{ inputs.sonar-key }}
+          -Dsonar.sources=.
+          -Dsonar.go.coverage.reportPaths=coverage.out
+          -Dsonar.go.tests.reportPaths=test-report.xml
+          -Dsonar.projectVersion=${{ inputs.project-version }}
+
+    - name: Upload de l'artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: drop
+        path: ${{ github.workspace }}
