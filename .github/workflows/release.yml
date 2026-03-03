@@ -32,7 +32,7 @@ jobs:
       - name: Commit frozen changelog via API
         if: steps.changelog.outcome == 'success'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           if git diff --quiet CHANGELOG.md; then
             echo "No changelog changes to commit."
@@ -42,7 +42,8 @@ jobs:
           # Get the current SHA of CHANGELOG.md on master
           SHA=$(gh api "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=master" --jq '.sha')
 
-          # Commit the frozen changelog via the Contents API (bypasses branch protection)
+          # Commit the frozen changelog via the Contents API
+          # Requires PAT_TOKEN secret with repo scope to bypass branch protection
           CONTENT=$(base64 -w 0 CHANGELOG.md)
           gh api "repos/${{ github.repository }}/contents/CHANGELOG.md" \
             --method PUT \

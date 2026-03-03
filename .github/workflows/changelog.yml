@@ -36,8 +36,9 @@ jobs:
       - name: Commit updated changelog via API
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
+          # Requires PAT_TOKEN secret with repo scope to bypass branch protection
           SHA=$(gh api "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=master" --jq '.sha')
           CONTENT=$(base64 -w 0 CHANGELOG.md)
           gh api "repos/${{ github.repository }}/contents/CHANGELOG.md" \
