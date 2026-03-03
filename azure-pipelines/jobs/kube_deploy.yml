@@ -7,8 +7,10 @@ parameters:
     type: string
 
 jobs:
-  - deployment: Dev
-    pool: 
+  - deployment: Deploy
+    displayName: 'Deploy to ${{ parameters.env }}'
+    timeoutInMinutes: 15
+    pool:
       vmImage: ubuntu-latest
     environment:
       name: ${{ parameters.env }}.${{ parameters.resource }}

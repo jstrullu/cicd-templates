@@ -1,0 +1,53 @@
+name: 'Python Mutation Testing (mutmut)'
+description: 'Tests de mutation avec mutmut pour les projets Python'
+
+inputs:
+  python-version:
+    description: 'Version de Python'
+    required: false
+    default: '3.12'
+  requirements-file:
+    description: 'Chemin du fichier requirements'
+    required: false
+    default: 'requirements.txt'
+  test-directory:
+    description: 'Répertoire de tests'
+    required: false
+    default: 'tests'
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    - name: Installation des dépendances
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ inputs.requirements-file }}
+
+    - name: Installation de mutmut
+      shell: bash
+      run: pip install mutmut
+
+    - name: Tests de mutation
+      shell: bash
+      run: |
+        mutmut run --paths-to-mutate=. --tests-dir=${{ inputs.test-directory }} --no-progress || true
+        mutmut html
+
+    - name: Upload du rapport de mutation
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mutation-report
+        path: html
+        retention-days: ${{ inputs.artifact-retention-days }}

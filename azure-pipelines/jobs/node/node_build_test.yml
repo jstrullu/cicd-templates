@@ -27,6 +27,7 @@ parameters:
 
 jobs:
   - job: Build_Test
+    timeoutInMinutes: 30
     steps:
     - checkout: self
       clean: true
@@ -40,6 +41,22 @@ jobs:
       displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
       inputs:
         versionSpec: '${{ parameters.nodeVersion }}'
+
+    - task: Cache@2
+      displayName: 'Cache npm packages'
+      inputs:
+        key: 'npm | "$(Agent.OS)" | package-lock.json'
+        restoreKeys: 'npm | "$(Agent.OS)"'
+        path: '$(Pipeline.Workspace)/.npm'
+      condition: eq('${{ parameters.packageManager }}', 'npm')
+
+    - task: Cache@2
+      displayName: 'Cache yarn packages'
+      inputs:
+        key: 'yarn | "$(Agent.OS)" | yarn.lock'
+        restoreKeys: 'yarn | "$(Agent.OS)"'
+        path: '$(Pipeline.Workspace)/.yarn'
+      condition: eq('${{ parameters.packageManager }}', 'yarn')
 
     - script: npm ci
       displayName: 'Install dependencies (npm)'

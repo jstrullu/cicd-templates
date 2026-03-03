@@ -15,6 +15,7 @@
 
 jobs:
   - job: BuildAndTest
+    timeoutInMinutes: 30
     steps:
       - checkout: self
         clean: true
@@ -45,12 +46,18 @@ jobs:
             projectVersion: ${{ parameters.projectVersion }}
             extraProperties: |
               sonar.cs.opencover.reportsPaths=**/coverage.opencover.xml
+      - task: Cache@2
+        displayName: 'Cache NuGet packages'
+        inputs:
+          key: 'nuget | "$(Agent.OS)" | **/*.csproj'
+          restoreKeys: 'nuget | "$(Agent.OS)"'
+          path: '$(Pipeline.Workspace)/.nuget/packages'
+
       - task: DotNetCoreCLI@2
         displayName: 'Restore'
         inputs:
           command: restore
           projects: '**/*.csproj'
-          nocache: true
       - task: DotNetCoreCLI@2
         displayName: 'Build'
         inputs:

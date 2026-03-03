@@ -1,0 +1,55 @@
+name: '.NET Core Mutation Testing (Stryker.NET)'
+description: 'Tests de mutation avec Stryker.NET pour les projets .NET Core'
+
+inputs:
+  dotnet-version:
+    description: 'Version du SDK .NET'
+    required: false
+    default: '8.0.x'
+  project-file:
+    description: 'Chemin du fichier .csproj à muter'
+    required: true
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation du SDK .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+        restore-keys: nuget-${{ runner.os }}-
+
+    - name: Restore
+      shell: bash
+      run: dotnet restore **/*.csproj
+
+    - name: Installation de Stryker.NET
+      shell: bash
+      run: dotnet tool install --global dotnet-stryker || true
+
+    - name: Tests de mutation
+      shell: bash
+      run: |
+        dotnet stryker \
+          --project "${{ inputs.project-file }}" \
+          --reporter html \
+          --reporter json \
+          --output StrykerOutput
+
+    - name: Upload du rapport de mutation
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mutation-report
+        path: StrykerOutput
+        retention-days: ${{ inputs.artifact-retention-days }}

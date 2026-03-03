@@ -1,0 +1,47 @@
+name: 'Node.js Mutation Testing (Stryker)'
+description: 'Tests de mutation avec Stryker pour les projets Node.js/TypeScript'
+
+inputs:
+  node-version:
+    description: 'Version de Node.js'
+    required: false
+    default: '20'
+  package-manager:
+    description: 'Gestionnaire de paquets (npm ou yarn)'
+    required: false
+    default: 'npm'
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Node.js ${{ inputs.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.package-manager }}
+
+    - name: Installation des dépendances (npm)
+      if: inputs.package-manager == 'npm'
+      shell: bash
+      run: npm ci
+
+    - name: Installation des dépendances (yarn)
+      if: inputs.package-manager == 'yarn'
+      shell: bash
+      run: yarn install --frozen-lockfile
+
+    - name: Tests de mutation
+      shell: bash
+      run: npx stryker run
+
+    - name: Upload du rapport de mutation
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mutation-report
+        path: reports/mutation
+        retention-days: ${{ inputs.artifact-retention-days }}

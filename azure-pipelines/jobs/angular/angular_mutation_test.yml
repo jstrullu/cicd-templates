@@ -8,6 +8,7 @@ parameters:
 jobs:
   - job: MutationTest
     displayName: 'Mutation Testing (Stryker)'
+    timeoutInMinutes: 60
     steps:
       - checkout: self
         clean: true

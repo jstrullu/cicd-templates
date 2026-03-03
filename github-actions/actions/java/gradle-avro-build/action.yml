@@ -12,6 +12,10 @@ inputs:
     description: 'Nom du fichier JSON de version'
     required: true
     default: 'cicd.json'
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
 
 runs:
   using: 'composite'
@@ -27,6 +31,7 @@ runs:
       with:
         distribution: 'temurin'
         java-version: ${{ inputs.java-version }}
+        cache: 'gradle'
 
     - name: Build Gradle
       shell: bash
@@ -39,3 +44,4 @@ runs:
       with:
         name: drop
         path: ${{ github.workspace }}
+        retention-days: ${{ inputs.artifact-retention-days }}

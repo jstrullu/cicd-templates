@@ -28,6 +28,7 @@ runs:
       uses: subosito/flutter-action@v2
       with:
         channel: 'stable'
+        cache: true
 
     - name: Installation de Cider
       shell: bash
@@ -73,10 +74,10 @@ runs:
           -Dsonar.cpp.file.suffixes=-
           -Dsonar.objc.file.suffixes=-
 
-    - name: Installation de Node.js 18
+    - name: Installation de Node.js 20
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
 
     - name: Configuration de l'environnement
       shell: bash

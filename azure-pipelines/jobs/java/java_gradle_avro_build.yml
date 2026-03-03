@@ -9,6 +9,7 @@ parameters:
 
 jobs:
   - job: Build_Test
+    timeoutInMinutes: 30
     steps:
     - checkout: self
       clean: true
@@ -22,6 +23,12 @@ jobs:
         versionSpec: ${{ parameters.javaVersion }}
         jdkArchitectureOption: 'x64'
         jdkSourceOption: 'PreInstalled'
+    - task: Cache@2
+      displayName: 'Cache Gradle packages'
+      inputs:
+        key: 'gradle | "$(Agent.OS)" | **/build.gradle*'
+        restoreKeys: 'gradle | "$(Agent.OS)"'
+        path: '$(GRADLE_USER_HOME)/caches'
     - task: Gradle@3
       inputs:
         gradleWrapperFile: 'gradlew'

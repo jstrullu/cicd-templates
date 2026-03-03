@@ -1,0 +1,44 @@
+name: 'Java Maven Mutation Testing (PITest)'
+description: 'Tests de mutation avec PITest pour les projets Java Maven'
+
+inputs:
+  java-version:
+    description: 'Version de Java'
+    required: true
+  maven-options:
+    description: 'Options Maven supplémentaires'
+    required: false
+    default: '-B -ntp'
+  pom-file:
+    description: 'Chemin du fichier POM'
+    required: false
+    default: 'pom.xml'
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Java ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java-version }}
+        cache: 'maven'
+
+    - name: Tests de mutation PITest
+      shell: bash
+      run: |
+        mvn test-compile org.pitest:pitest-maven:mutationCoverage \
+          ${{ inputs.maven-options }} \
+          -f ${{ inputs.pom-file }}
+
+    - name: Upload du rapport de mutation
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mutation-report
+        path: target/pit-reports
+        retention-days: ${{ inputs.artifact-retention-days }}

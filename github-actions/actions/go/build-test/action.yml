@@ -33,6 +33,10 @@ inputs:
     description: 'Token SonarQube'
     required: false
     default: ''
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
 
 runs:
   using: 'composite'
@@ -94,3 +98,4 @@ runs:
       with:
         name: drop
         path: ${{ github.workspace }}
+        retention-days: ${{ inputs.artifact-retention-days }}

@@ -33,6 +33,10 @@ inputs:
     description: 'Token SonarQube'
     required: false
     default: ''
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
 
 runs:
   using: 'composite'
@@ -47,6 +51,7 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
+        cache: 'pip'
 
     - name: Installation des dépendances
       shell: bash
@@ -86,3 +91,4 @@ runs:
       with:
         name: drop
         path: ${{ github.workspace }}
+        retention-days: ${{ inputs.artifact-retention-days }}

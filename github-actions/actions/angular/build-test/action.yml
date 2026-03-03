@@ -13,14 +13,19 @@ inputs:
     description: 'Nom du fichier JSON de version'
     required: true
     default: 'cicd.json'
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
 
 runs:
   using: 'composite'
   steps:
-    - name: Installation de Node.js 18
+    - name: Installation de Node.js 20
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
+        cache: 'npm'
 
     # SonarQube Prepare (commenté comme dans Azure Pipelines)
     # - name: SonarQube Prepare
@@ -57,6 +62,7 @@ runs:
       with:
         name: drop
         path: ${{ github.workspace }}
+        retention-days: ${{ inputs.artifact-retention-days }}
 
     # SonarQube Publish (commenté comme dans Azure Pipelines)
     # - name: SonarQube Publish

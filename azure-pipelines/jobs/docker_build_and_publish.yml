@@ -11,6 +11,7 @@ parameters:
 
 jobs:
   - job: build_image
+    timeoutInMinutes: 30
     steps:
       - download: current
         artifact: drop

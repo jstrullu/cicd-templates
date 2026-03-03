@@ -1,0 +1,44 @@
+name: 'Go Mutation Testing (go-mutesting)'
+description: 'Tests de mutation avec go-mutesting pour les projets Go'
+
+inputs:
+  go-version:
+    description: 'Version de Go'
+    required: false
+    default: '1.22'
+  build-flags:
+    description: 'Cible de build Go'
+    required: false
+    default: './...'
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Go ${{ inputs.go-version }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Téléchargement des dépendances
+      shell: bash
+      run: go mod download
+
+    - name: Installation de go-mutesting
+      shell: bash
+      run: go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+
+    - name: Tests de mutation
+      shell: bash
+      run: go-mutesting ${{ inputs.build-flags }} > mutation-report.txt 2>&1 || true
+
+    - name: Upload du rapport de mutation
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mutation-report
+        path: mutation-report.txt
+        retention-days: ${{ inputs.artifact-retention-days }}

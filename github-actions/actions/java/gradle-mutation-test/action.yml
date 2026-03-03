@@ -1,0 +1,35 @@
+name: 'Java Gradle Mutation Testing (PITest)'
+description: 'Tests de mutation avec PITest pour les projets Java Gradle'
+
+inputs:
+  java-version:
+    description: 'Version de Java'
+    required: true
+  artifact-retention-days:
+    description: 'Nombre de jours de rétention des artefacts'
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installation de Java ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java-version }}
+        cache: 'gradle'
+
+    - name: Tests de mutation PITest
+      shell: bash
+      run: |
+        chmod +x ./gradlew
+        ./gradlew pitest
+
+    - name: Upload du rapport de mutation
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mutation-report
+        path: build/reports/pitest
+        retention-days: ${{ inputs.artifact-retention-days }}

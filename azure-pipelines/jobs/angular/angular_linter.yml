@@ -4,6 +4,7 @@ parameters:
 
 jobs:
   - job: Linter
+    timeoutInMinutes: 15
     steps:
       - checkout: self
         clean: true
