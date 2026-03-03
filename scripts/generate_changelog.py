@@ -32,6 +32,14 @@ CATEGORY_MAP = {
     r'^doc': 'Documentation',
 }
 
+# Commits matching these patterns are excluded from the changelog
+SKIP_PATTERNS = [
+    r'\[skip ci\]',
+    r'^chore:',
+    r'^Merge pull request',
+    r'^Merge branch',
+]
+
 
 def get_latest_tag():
     """Return the most recent git tag, or None."""
@@ -59,7 +67,14 @@ def get_commits_since(tag):
     )
     if result.returncode != 0:
         return []
-    return [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+    commits = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+    # Filter out noise (CI commits, merges, chores)
+    filtered = []
+    for msg in commits:
+        if any(re.search(p, msg) for p in SKIP_PATTERNS):
+            continue
+        filtered.append(msg)
+    return filtered
 
 
 def classify_commits(commits):

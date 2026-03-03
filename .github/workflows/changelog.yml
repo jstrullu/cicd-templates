@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: changelog-update
+  cancel-in-progress: true
+
 jobs:
   update-changelog:
     name: Auto-update CHANGELOG.md

@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: changelog-update
+
 jobs:
   create-release:
     name: Create GitHub Release

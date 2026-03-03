@@ -9,46 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2026-03-03
 
-## [0.6.1] - 2026-03-03
+### Added
+- Add `enableSecurityChecks` parameter to dotnetcore, flutter, and java_gradle_avro pipelines
+- Create flutter/security_checks.yml job template (Snyk)
+- Uncomment and conditionally enable SonarQube in Angular build template
+
+### Changed
+- Update Angular jobs from Node.js 18.x to 20.x
+- Remove `continueOnError` from .NET SonarQube tasks for consistency with other stacks
 
 ## [0.6.1] - 2026-03-03
 
 ### Added
-- Add GitHub Actions CI and auto-changelog workflows
-- Add mutation testing support for all languages
-- Add Docker build and Kubernetes deploy stages to .NET Core pipeline
-- adding more languages
-- Add Java Maven pipeline template
-- Add Go pipeline template
-- Add Node.js/TypeScript pipeline template
-- Add Python pipeline template
-- Add community and governance files for public repository
-- Add per-branch version increment for each git flow strategy
-- Add configurable git flow strategy to initialization stage
+- Make SonarQube steps optional in dotnetcore and flutter GitHub Actions
 
 ### Changed
-- Port Azure Pipelines templates to GitHub Actions
-- Merge pull request #6 from jstrullu/claude/read-code-init-memory-MOceZ
-- Replace expression with GITHUB_BASE_REF env var in CI workflow
-- Merge pull request #5 Add GitHub Actions CI and auto-changelog workflows
-- Merge pull request #4
-- Move Finalization stage after Deploy in all pipelines
-- Skip SonarQube steps when sonarKey is not provided
-- turning into public repo
-- Prepare repository for public release
-- Merge pull request #1 from jstrullu/claude/read-code-init-memory-MOceZ
-- Translate French variable names, identifiers, and comments to English
-- démarrage github
-- creation du dossier azure pipelines
+- Use PAT_TOKEN to bypass branch protection in changelog workflows
+
+## [0.6.0] - 2026-03-03
+
+### Added
+- Complete GitHub Actions parity with Azure Pipelines for all 9 stacks
+- Add security checks (Snyk) to all language pipelines
+- Add parameterizable git user email/name for finalization
 
 ### Fixed
-- Fix CI workflow by moving sed logic to external script
-- Fix GitHub Actions workflow expression parsing error
+- Use GitHub Contents API to bypass branch protection in CI workflows
+- Release workflow uses direct push with admin bypass for changelog freeze
+
+## [0.5.1] - 2026-03-03
 
 ### Documentation
-- auto-update CHANGELOG.md [skip ci]
-- auto-update CHANGELOG.md [skip ci]
+- Update README with new stacks, GitHub Actions usage, and repo CI/CD
 
+## [0.5.0] - 2026-03-03
+
+### Added
+- Add release workflow and changelog freeze script
 
 ## [0.1.0] - Initial release
 
@@ -61,3 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Snyk security scanning for .NET Core
 - Flutter-specific versioning with Cider and Firebase deployment
 - Multi-stage pipeline pattern: Initialization, Build & Test, Docker, Deploy, Finalization
+- GitHub Actions CI and auto-changelog workflows
+- Mutation testing support for all languages
+- Per-branch version increment for each git flow strategy
+- Configurable git flow strategy (github-flow, gitflow, trunk-based, gitlab-flow)
+- Port Azure Pipelines templates to GitHub Actions
+- Add community and governance files for public repository
