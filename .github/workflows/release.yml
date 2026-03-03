@@ -32,16 +32,18 @@ jobs:
       - name: Commit frozen changelog to master
         if: steps.changelog.outcome == 'success'
         run: |
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog changes to commit."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet CHANGELOG.md; then
-            git stash
-            git checkout master
-            git stash pop
-            git add CHANGELOG.md
-            git commit -m "docs: freeze changelog for ${{ github.ref_name }} [skip ci]"
-            git push origin master
-          fi
+          git stash
+          git checkout master
+          git stash pop
+          git add CHANGELOG.md
+          git commit -m "docs: freeze changelog for ${{ github.ref_name }} [skip ci]"
+          git push origin master
         continue-on-error: true
 
       - name: Prepare release notes fallback
