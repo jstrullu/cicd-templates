@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.1] - 2026-03-03
 
+## [0.6.1] - 2026-03-03
+
 ### Added
 - Add GitHub Actions CI and auto-changelog workflows
 - Add mutation testing support for all languages
