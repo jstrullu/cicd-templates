@@ -4,17 +4,17 @@ Reusable CI/CD pipeline templates for **Azure Pipelines** and **GitHub Actions**
 
 ## Supported Stacks
 
-| Stack | Azure Pipelines | GitHub Actions | Build & Test | Docker | Kubernetes | SonarQube |
-|-------|:-:|:-:|:-:|:-:|:-:|:-:|
-| .NET Core | Yes | Yes | Yes | - | - | Yes |
-| Java/Gradle | Yes | Yes | Yes | Yes | Yes | Yes |
-| Java/Gradle (Avro) | Yes | Yes | Yes | - | - | - |
-| Angular/npm | Yes | Yes | Yes | Yes | Yes | Optional |
-| Flutter | Yes | Yes | Yes | - | Firebase | Yes |
-| Go | Yes | Yes | Yes | Yes | Yes | Yes |
-| Java/Maven | Yes | Yes | Yes | Yes | Yes | Yes |
-| Node.js/TypeScript | Yes | Yes | Yes | Yes | Yes | Yes |
-| Python | Yes | Yes | Yes | Yes | Yes | Yes |
+| Stack | Azure Pipelines | GitHub Actions | Build & Test | Docker | Kubernetes | SonarQube | Security (Snyk) |
+|-------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| .NET Core | Yes | Yes | Yes | Yes | Yes | Optional | Optional |
+| Java/Gradle | Yes | Yes | Yes | Yes | Yes | Optional | Optional |
+| Java/Gradle (Avro) | Yes | Yes | Yes | - | - | - | Optional |
+| Angular/npm | Yes | Yes | Yes | Yes | Yes | Optional | Optional |
+| Flutter | Yes | Yes | Yes | - | Firebase | Optional | Optional |
+| Go | Yes | Yes | Yes | Yes | Yes | Optional | Optional |
+| Java/Maven | Yes | Yes | Yes | Yes | Yes | Optional | Optional |
+| Node.js/TypeScript | Yes | Yes | Yes | Yes | Yes | Optional | Optional |
+| Python | Yes | Yes | Yes | Yes | Yes | Optional | Optional |
 
 ## Repository Structure
 
@@ -38,8 +38,11 @@ Reusable CI/CD pipeline templates for **Azure Pipelines** and **GitHub Actions**
 │   │   ├── dotnetcore/
 │   │   ├── finalisation/
 │   │   ├── flutter/
+│   │   ├── go/
 │   │   ├── java/
 │   │   ├── kube-deploy/
+│   │   ├── node/
+│   │   ├── python/
 │   │   ├── semantic-version/
 │   │   └── set-version-file/
 │   └── workflow-templates/  # Full pipeline workflow templates
@@ -124,7 +127,10 @@ Most templates accept these common parameters:
 | `releaseIncrement` | Version bump for `release/*` branches (gitflow only) | `minor` |
 | `hotfixIncrement` | Version bump for `hotfix/*` branches (gitflow only) | `patch` |
 | `jsonFile` | Path to the version JSON file | `cicd.json` |
-| `sonarKey` | SonarQube project key | - |
+| `sonarKey` | SonarQube project key (empty = disabled) | `''` |
+| `enableSecurityChecks` | Enable Snyk security scanning stage | `false` |
+| `securityTargetFile` | Target file for Snyk (e.g. `go.mod`, `package.json`) | stack-specific |
+| `enableMutationTesting` | Enable mutation testing stage | `false` |
 | `dockerRegistry` | Docker image repository name | - |
 | `containerRegistry` | Azure DevOps service connection for Docker | - |
 | `appName` | Application name (used for Kubernetes namespace) | `$(Build.Repository.Name)` |
@@ -222,7 +228,9 @@ This repository has its own GitHub Actions workflows:
 |----------|---------|---------|
 | **CI** (`ci.yml`) | Push to master, PRs | YAML linting, template validation, changelog check |
 | **Update Changelog** (`changelog.yml`) | Push to master | Auto-generates the `[Unreleased]` section from commit history |
-| **Release** (`release.yml`) | Tag push (`v*`, `*-*.*.*`) | Freezes changelog, creates a GitHub Release with release notes |
+| **Release** (`release.yml`) | Tag push (`v*`, `*.*.*`) | Freezes changelog, creates a GitHub Release with release notes |
+
+The changelog and release workflows share a concurrency group to prevent race conditions when a commit and tag are pushed together.
 
 ## Documentation
 
