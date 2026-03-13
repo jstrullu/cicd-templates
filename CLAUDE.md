@@ -1,64 +1,81 @@
-# CLAUDE.md
+# CLAUDE.md — CI/CD Templates
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Shared, reusable CI/CD template library for Azure DevOps and GitHub Actions. 9 technology stacks, 5-stage pipeline pattern. No application code — only YAML pipeline definitions.
 
-## Purpose
+## Supported Stacks
 
-This is a shared CI/CD template library providing reusable pipeline templates for Azure DevOps and GitHub Actions. Consumer repositories reference these templates to build their pipelines. There is no buildable application code here — only YAML pipeline definitions.
+.NET Core, Java/Gradle, Java/Gradle Avro, Java/Maven, Angular/npm, Flutter, Go, Node.js/TypeScript, Python
 
-## Repository Structure
+## Structure
 
 ```
 azure-pipelines/
-  pipelines/   → Top-level pipeline definitions (entry points consumed by other repos)
-  jobs/        → Reusable job templates, organized by tech stack
-  steps/       → Reusable step templates (versioning helpers)
+  pipelines/    → 9 entry-point pipeline templates (consumed by other repos)
+  jobs/         → Language-specific + cross-cutting job templates
+  steps/        → Reusable step templates (versioning, git flow context)
 github-actions/
-  actions/             → Composite actions (reusable building blocks per stack)
-  workflow-templates/  → Full pipeline workflow templates (copied into consumer repos)
+  actions/              → Composite actions (building blocks per stack)
+  workflow-templates/   → Full pipeline workflows (copied into consumer repos)
+scripts/                → lint_yaml.sh, validate_templates.py, changelog scripts
+docs/                   → consumer-example.md, migration guide, troubleshooting
 ```
 
-## Architecture
+## Pipeline Architecture — 5-Stage Pattern
 
-### Azure Pipelines (main focus)
+1. **Initialization** — Semantic version bump via `cicd.json` + `semver` npm. PR title `#VERSION MAJOR/MINOR/PATCH` overrides default.
+2. **Build & Test** — Language-specific: restore, compile, test (coverage), SonarQube (optional).
+3. **Security Checks** (optional) — Snyk scanning when `enableSecurityChecks=true`.
+4. **Docker Build & Publish** (conditional) — Skipped on PRs. Builds image, pushes with semver tag.
+5. **Finalization** (conditional) — Updates version file, commits with `***NO_CI***`, creates git tag, pushes.
 
-All pipelines follow a common stage sequence:
+**Git Flow Strategies:** github-flow, trunk-based, gitflow, gitlab-flow. Resolved by `resolve_gitflow_context.yml`.
 
-1. **Initialisation** — Semantic version bump via `json_semantic_version.yml`. Reads/creates a `cicd.json` file in the consumer repo, bumps the version using the `semver` npm package, and outputs `DockerTag` for downstream stages.
-2. **Build & Test** — Language-specific build, test, and SonarQube analysis.
-3. **Docker Build & Publish** / **Deploy** — Optional stages, skipped on PRs (`ne(variables['Build.Reason'], 'PullRequest')`).
-4. **Finalisation** — Writes the new version to `cicd.json`, commits with `***NO_CI***` prefix (to avoid CI loops), creates a git tag (`branch-version`), and pushes.
+## Commands (repo self-CI)
 
-### Version Bump Override
+```bash
+# Lint YAML
+bash scripts/lint_yaml.sh
 
-The `set_version_increment` step inspects the PR title for a `#VERSION` keyword (e.g., `#VERSION major`) to override the default `patch` increment.
+# Validate templates
+python3 scripts/validate_templates.py
 
-### Supported Tech Stacks
+# Generate changelog
+python3 scripts/generate_changelog.py
+```
 
-| Stack | Pipeline | Jobs |
-|-------|----------|------|
-| .NET Core | `dotnetcore_pipeline.yml` | `dotnetcore_build_test.yml`, `security_checks.yml` (Snyk) |
-| Java/Gradle | `java_gradle_pipeline.yml` | `java_gradle_test_and_build.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
-| Java/Gradle Avro | `java_gradle_avro_pipeline.yml` | `java_gradle_avro_build.yml`, `gradle_package_publish.yml` |
-| Java/Maven | `java_maven_pipeline.yml` | `java_maven_test_and_build.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
-| Angular/npm | `angular_npm_pipeline.yml` | `angular_test_and_build.yml`, `angular_linter.yml` |
-| Flutter | `flutter_pipeline.yml` | `flutter_version_increment.yml`, `flutter_build_test.yml`, `flutter_build_firebase_deploy.yml` |
-| Go | `go_pipeline.yml` | `go_build_test.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
-| Node.js/TypeScript | `node_pipeline.yml` | `node_build_test.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
-| Python | `python_pipeline.yml` | `python_build_test.yml`, `docker_build_and_publish.yml`, `kube_deploy.yml` |
+## Key Design Decisions
 
-### Cross-cutting jobs
+- **Zero hardcoded values**: No internal IPs, no org-specific secrets. `validate_templates.py` enforces this.
+- **Consumer contract**: Provide `cicd.json` (`{"version": "0.0.0"}`) at repo root.
+- **Language-aware finalization**: npm version (.NET .csproj, Node package.json, Python pyproject.toml, Maven pom.xml).
+- **PR-aware conditionals**: Docker/deploy/finalize skip on pull requests.
+- **French display names**: All step/job display names and comments in French.
+- **Cross-platform parity**: Azure Pipelines (primary) + GitHub Actions (full port) for all 9 stacks.
+- **Mutation testing**: Optional per stack (Stryker.NET, Stryker JS, PIT Java).
 
-- `docker_build_and_publish.yml` — Builds and pushes Docker images to a registry.
-- `kube_deploy.yml` — Deploys to Kubernetes using manifests from the consumer repo's `.kube/` directory with token replacement.
-- `finalisation.yml` — Language-aware version commit and git tag push. Handles Angular/Node (`npm version`), .NET (`AssemblyVersion` in .csproj), Python (`pyproject.toml`/`setup.cfg`/`setup.py`), Maven (`pom.xml` via `mvn versions:set`), and Java/Flutter/Go (via `cicd.json` only).
+## Claude Code Workflow
+
+1. **Planning**: Identify which stack and platform (Azure/GitHub) is affected
+2. **Implementation**: Follow YAML conventions, maintain cross-platform parity
+3. **Verification**: `bash scripts/lint_yaml.sh && python3 scripts/validate_templates.py`
+
+### Contextual Rules
+
+`.claude/rules/` auto-load by path:
+- `azure-pipelines.md` — Azure template conventions, parameter patterns, path references
+- `github-actions.md` — Composite actions, workflow templates, input conventions
+- `versioning.md` — Semantic versioning flow, cicd.json, finalization patterns
+
+### Custom Agents
+
+- **`add-stack`** — Add support for a new technology stack (both Azure + GitHub Actions)
+- **`add-stage`** — Add a new pipeline stage to existing stack
 
 ## Conventions
 
-- **Language**: Display names and comments are in French.
-- **Template references**: Pipelines use absolute paths from repo root (`/jobs/...`). Job templates reference steps with relative paths (`..\..\steps\...`).
-- **Version persistence**: All stacks (except Flutter, which uses `pubspec.yaml` via Cider) store version in `cicd.json` at the consumer repo root.
-- **PR builds**: Docker, deploy, and finalisation stages are conditionally skipped for pull request builds.
-- **SonarQube**: Integrated into all build jobs. Some Angular/Flutter Sonar tasks are currently commented out.
-- **Node.js 20.x** is used across all stacks that need Node.
-- **GitHub Actions**: All 9 stacks ported — composite actions and workflow templates available for every stack.
+- YAML: 2-space indent, max 250 chars/line (yamllint enforced)
+- Azure template refs: absolute paths in pipelines (`/jobs/...`), relative in jobs (`..\..\steps\...`)
+- GitHub Actions inputs: kebab-case (`sonar-project-key`)
+- Azure parameters: camelCase (`sonarProjectKey`)
+- All descriptions and display names in French
+- Conventional commits required for contributions
