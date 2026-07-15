@@ -32,6 +32,22 @@ jobs:
       - name: Run template validation
         run: python scripts/validate_templates.py
 
+  validate-contracts:
+    name: Validate template contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ruamel.yaml
+        run: pip install ruamel.yaml
+
+      - name: Run contract validation
+        run: python scripts/validate_contracts.py
+
   changelog-check:
     name: Changelog updated
     if: github.event_name == 'pull_request'

@@ -40,7 +40,7 @@ jobs:
         inputs:
           mode: 'auto'
           channel: 'stable'
-      - template: ..\..\steps\set_versionIncrement.yml
+      - template: ..\..\steps\set_version_increment.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
       - task: shellexec@0
