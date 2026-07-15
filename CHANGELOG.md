@@ -7,9 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- update validation process for CI steps and jobs
-- [skip-ci] save before format
+### Fixed
+- fixing release CI to be triggered manualy of do not work properly
 
 
 ## [0.8.2] - 2026-03-03
