@@ -5,6 +5,13 @@ on:
     tags:
       - 'v*'
       - '*.*.*'
+  # Fallback manuel : un tag posé sur un commit « [skip ci] » ne déclenche pas
+  # l'event push. Permet de (re)lancer la release à la main pour ce tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag à releaser (ex. 1.0.0)'
+        required: true
 
 permissions:
   contents: write
@@ -16,10 +23,15 @@ jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
+    # Sur push tag : github.ref_name = le tag. Sur workflow_dispatch : l'input.
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Sur dispatch, checkout le commit du tag (sinon HEAD de la branche).
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - uses: actions/setup-python@v5
         with:
@@ -28,7 +40,7 @@ jobs:
       - name: Freeze changelog and extract release notes
         id: changelog
         run: |
-          python scripts/freeze_changelog.py "${{ github.ref_name }}"
+          python scripts/freeze_changelog.py "${{ env.TAG }}"
           echo "has-notes=true" >> "$GITHUB_OUTPUT"
         continue-on-error: true
 
@@ -50,7 +62,7 @@ jobs:
           CONTENT=$(base64 -w 0 CHANGELOG.md)
           gh api "repos/${{ github.repository }}/contents/CHANGELOG.md" \
             --method PUT \
-            --field message="docs: freeze changelog for ${{ github.ref_name }} [skip ci]" \
+            --field message="docs: freeze changelog for ${{ env.TAG }} [skip ci]" \
             --field content="$CONTENT" \
             --field sha="$SHA" \
             --field branch="master"
@@ -59,18 +71,18 @@ jobs:
       - name: Prepare release notes fallback
         if: steps.changelog.outcome != 'success'
         run: |
-          echo "Release ${{ github.ref_name }}" > /tmp/release_notes.md
+          echo "Release ${{ env.TAG }}" > /tmp/release_notes.md
 
       - name: Extract version number
         id: version
         run: |
-          VERSION=$(echo "${{ github.ref_name }}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          VERSION=$(echo "${{ env.TAG }}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
+          gh release create "${{ env.TAG }}" \
             --title "v${{ steps.version.outputs.version }}" \
             --notes-file /tmp/release_notes.md
