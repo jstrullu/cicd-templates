@@ -42,7 +42,7 @@ stages:
   - stage: Initialization
     displayName: 'Initialization and versioning'
     jobs:
-      - template: /azure-pipelines/jobs/flutter/flutter_version_increment.yml
+      - template: /jobs/flutter/flutter_version_increment.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           gitFlowType: ${{ parameters.gitFlowType }}
@@ -54,7 +54,7 @@ stages:
     - stage: Security_Checks
       dependsOn: Initialization
       jobs:
-        - template: /azure-pipelines/jobs/flutter/security_checks.yml
+        - template: /jobs/flutter/security_checks.yml
           parameters:
             targetFile: ${{ parameters.securityTargetFile }}
 
@@ -63,7 +63,7 @@ stages:
     dependsOn: Initialization
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     jobs:
-      - template: /azure-pipelines/jobs/flutter/flutter_build_firebase_deploy.yml
+      - template: /jobs/flutter/flutter_build_firebase_deploy.yml
         parameters:
           sonarKey: ${{parameters.sonarKey}}
           environment: 'dev'
@@ -74,7 +74,7 @@ stages:
     dependsOn: DeployDev
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.deployEnvironment'], 'production'))
     jobs:
-      - template: /azure-pipelines/jobs/flutter/flutter_build_firebase_deploy.yml
+      - template: /jobs/flutter/flutter_build_firebase_deploy.yml
         parameters:
           sonarKey: ${{parameters.sonarKey}}
           environment: 'prod'
