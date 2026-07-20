@@ -8,6 +8,8 @@ This script checks that templates *fit together*:
     A1. Reference resolves     — the target file exists.
     A2. Unknown parameter      — every passed parameter is declared in the target.
     A3. Missing required param — every target parameter without `default` is passed.
+    A4. Parameter type mismatch — a passed *literal* matches the declared `type`
+        (`boolean` / `number` / `string` only).
 
   GitHub Actions (`uses: <ref>` with optional `with:` block)
     G1. Reference resolves     — internal composite action `action.yml` exists.
@@ -15,7 +17,10 @@ This script checks that templates *fit together*:
     G3. Missing required input — every `required: true` input without `default` is passed.
 
 Out of scope (documented limitations, not checked here):
-    - Azure parameter *type* consistency (bonus).
+    - Azure A4: `${{ ... }}` expressions — type undeterminable statically, never judged.
+    - Azure A4: `object` type — too polymorphic (mapping or list, nested structures).
+    - Azure A4: structural types (step/stepList, job/jobList, deployment/deploymentList,
+      stage/stageList) — not checkable as literals.
     - GitHub `steps.<x>.outputs.<y>` traceability (bonus) — fragile under `${{ }}`.
     - External GitHub actions (actions/checkout, docker/*, ...) — not our contract.
 
@@ -121,7 +126,7 @@ def resolve_azure_template(ref, current_file):
 
 
 def declared_azure_params(target_path):
-    """Return {name: has_default} for the `parameters:` of an Azure template."""
+    """Return {name: {'has_default': bool, 'type': str|None}} for an Azure template."""
     node = load_yaml(target_path)
     declared = {}
     if not isinstance(node, CommentedMap):
@@ -130,8 +135,44 @@ def declared_azure_params(target_path):
     if isinstance(params, CommentedSeq):
         for entry in params:
             if isinstance(entry, CommentedMap) and "name" in entry:
-                declared[str(entry["name"])] = "default" in entry
+                declared[str(entry["name"])] = {
+                    "has_default": "default" in entry,
+                    "type": str(entry["type"]) if "type" in entry else None,
+                }
     return declared
+
+
+# Azure declared type -> Python type produced by ruamel for a YAML literal.
+# Only these three are checked; `object` and structural types (step/stepList,
+# job/jobList, deployment*, stage*) are out of scope — see module docstring.
+_AZURE_TYPE_PYTHON = {
+    "boolean": bool,
+    "number": (int, float),
+    "string": str,
+}
+
+
+def azure_type_mismatch(declared_type, value):
+    """True only on a *certain* literal/type mismatch. Conservative by design."""
+    if declared_type is None:
+        return False
+    if declared_type not in _AZURE_TYPE_PYTHON:
+        return False  # object / structural types: out of scope
+
+    # An expression is always a str containing "${{": its runtime type is
+    # undeterminable statically, so never judge it.
+    if isinstance(value, str) and "${{" in value:
+        return False
+
+    if declared_type == "boolean":
+        return not isinstance(value, bool)
+    if declared_type == "number":
+        # bool is a subclass of int in Python: exclude it explicitly,
+        # otherwise `true` would pass as a valid number.
+        return isinstance(value, bool) or not isinstance(value, (int, float))
+    if declared_type == "string":
+        return not isinstance(value, str)
+    return False
 
 
 def check_azure_file(filepath):
@@ -177,9 +218,21 @@ def check_azure_file(filepath):
                     f"« {target_rel} » mais non déclaré"
                 )
 
+        # A4 — parameter type mismatch (literals only; expressions never judged).
+        if isinstance(passed, CommentedMap):
+            for name in passed_names:
+                if name in declared and declared[name]["type"]:
+                    value = passed[name]
+                    if azure_type_mismatch(declared[name]["type"], value):
+                        pline = key_line(passed, name)
+                        errors.append(
+                            f"{rel}:{pline} : paramètre « {name} » attend le type "
+                            f"« {declared[name]['type']} » mais reçoit une valeur incompatible"
+                        )
+
         # A3 — required parameter (no default) not passed.
-        for name, has_default in declared.items():
-            if not has_default and name not in passed_names:
+        for name, spec in declared.items():
+            if not spec["has_default"] and name not in passed_names:
                 errors.append(
                     f"{rel}:{line} : paramètre requis « {name} » du template "
                     f"« {target_rel} » non fourni"
