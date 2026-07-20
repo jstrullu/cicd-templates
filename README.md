@@ -1,3 +1,10 @@
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jstrullu/cicd-templates/ci.yml?logo=github&label=CI)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jstrullu/cicd-templates/changelog.yml?logo=github&label=Changelog)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jstrullu/cicd-templates/release.yml?logo=github&label=Release)
+ ![Github Release](https://img.shields.io/github/v/release/jstrullu/cicd-templates?label=Released%20Version&color=green)
+
+
+
 # CI/CD Pipeline Templates
 
 Reusable CI/CD pipeline templates for **Azure Pipelines** and **GitHub Actions**, supporting multiple technology stacks with built-in semantic versioning, code quality scanning, and multi-stage deployments.
