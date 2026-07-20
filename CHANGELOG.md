@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-20
+
 ### Added
 - add Azure param type check A4 Contract validator now verifies that a literal value passed to an Azure template matches the parameter's declared `type`. Complements A2 (unknown parameter) and A3 (missing required parameter), which only checked names.
 
