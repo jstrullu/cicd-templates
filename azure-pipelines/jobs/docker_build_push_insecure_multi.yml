@@ -1,0 +1,118 @@
+parameters:
+  - name: registry
+    displayName: Registry host (e.g. registry.internal:5000 or ghcr.io/org)
+    type: string
+  - name: appName
+    displayName: Base name used as image prefix (e.g. my-app -> my-app-api, my-app-frontend)
+    type: string
+  - name: projectVersion
+    type: string
+  - name: alsoTagLatest
+    type: boolean
+    default: true
+  - name: insecureRegistryUrl
+    type: string
+    default: ''
+  # One entry per image. Each item:
+  #   name       (required) — image suffix; final image = registry/appName-name
+  #   dockerfile (required) — path to the Dockerfile, relative to repo root
+  #   context    (optional, default '.') — Docker build context, relative to repo root
+  #   target     (optional) — multi-stage build target (e.g. ShopTemplate's single
+  #              Dockerfile with `--target api` / `--target frontend`)
+  #   buildArgs  (optional) — newline-separated KEY=VALUE, passed as --build-arg
+  #
+  # Example (matches PentestSaaS: 3 images, 3 separate Dockerfiles):
+  #   dockerImages:
+  #     - name: api
+  #       dockerfile: pentest-saas/docker/Dockerfile.Api
+  #       context: pentest-saas/
+  #     - name: worker
+  #       dockerfile: pentest-saas/docker/Dockerfile.Worker
+  #       context: pentest-saas/
+  #     - name: frontend
+  #       dockerfile: pentest-saas-frontend/docker/Dockerfile.Frontend
+  #       context: pentest-saas-frontend/
+  #
+  # Example (matches ShopTemplate: one Dockerfile, two build targets):
+  #   dockerImages:
+  #     - name: api
+  #       dockerfile: Dockerfile
+  #       target: api
+  #     - name: frontend
+  #       dockerfile: Dockerfile
+  #       target: frontend
+  #       buildArgs: |
+  #         VITE_API_URL=$(SANDBOX_API_URL)
+  - name: dockerImages
+    type: object
+    default: []
+
+# Multi-image variant of docker_build_push_insecure.yml — same CLI-direct
+# build/push pattern (no service connection, no login), but loops over a
+# list of images instead of assuming a single one. Matches repos that build
+# 2-3 images from one repo: PentestSaaS (API+Worker+Frontend), QualiForma
+# (API+Frontend), Portfolio (Backend+Frontend), ShopTemplate (one Dockerfile,
+# two --target builds).
+jobs:
+  - job: build_and_push_images
+    timeoutInMinutes: 45
+    steps:
+      - download: current
+        artifact: drop
+      - bash: cp -rf $(Pipeline.Workspace)/drop/* ./
+
+      - script: docker system prune -f --filter "until=72h"
+        displayName: 'Prune old Docker artifacts'
+
+      - ${{ if ne(parameters.insecureRegistryUrl, '') }}:
+        - script: |
+            set -e
+            DAEMON_JSON="/etc/docker/daemon.json"
+            TARGET="${{ parameters.insecureRegistryUrl }}"
+            if [ -f "$DAEMON_JSON" ] && grep -q "$TARGET" "$DAEMON_JSON" 2>/dev/null; then
+              echo "Registry $TARGET already configured as insecure — skipping daemon restart."
+            else
+              echo "{ \"insecure-registries\" : [\"$TARGET\"] }" | sudo tee "$DAEMON_JSON"
+              sudo service docker restart
+            fi
+          displayName: 'Ensure insecure registry configured (idempotent)'
+
+      - ${{ each image in parameters.dockerImages }}:
+        - script: |
+            set -e
+            IMAGE="${{ parameters.registry }}/${{ parameters.appName }}-${{ image.name }}"
+            TAG="${{ parameters.projectVersion }}"
+
+            TAG_FLAGS=(-t "$IMAGE:$TAG")
+            if [ "${{ parameters.alsoTagLatest }}" = "True" ]; then
+              TAG_FLAGS+=(-t "$IMAGE:latest")
+            fi
+
+            BUILD_ARGS_FLAGS=()
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              BUILD_ARGS_FLAGS+=(--build-arg "$line")
+            done <<< "${{ coalesce(image.buildArgs, '') }}"
+
+            TARGET_FLAG=()
+            TARGET_VALUE="${{ coalesce(image.target, '') }}"
+            if [ -n "$TARGET_VALUE" ]; then
+              TARGET_FLAG=(--target "$TARGET_VALUE")
+            fi
+
+            docker build \
+              "${TAG_FLAGS[@]}" \
+              -f "${{ image.dockerfile }}" \
+              "${TARGET_FLAG[@]}" \
+              "${BUILD_ARGS_FLAGS[@]}" \
+              "${{ coalesce(image.context, '.') }}"
+          displayName: 'docker build — ${{ image.name }}'
+        - script: |
+            set -e
+            IMAGE="${{ parameters.registry }}/${{ parameters.appName }}-${{ image.name }}"
+            TAG="${{ parameters.projectVersion }}"
+            docker push "$IMAGE:$TAG"
+            if [ "${{ parameters.alsoTagLatest }}" = "True" ]; then
+              docker push "$IMAGE:latest"
+            fi
+          displayName: 'docker push — ${{ image.name }}'

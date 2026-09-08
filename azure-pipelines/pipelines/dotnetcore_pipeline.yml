@@ -67,6 +67,14 @@ parameters:
     displayName: Image name for insecure-cli mode (defaults to appName)
     type: string
     default: ''
+  # Multi-image variant of insecure-cli — leave empty for the mono-image
+  # behavior above. When set, dockerImageName is ignored: images are named
+  # {appName}-{item.name}. See docker_build_push_insecure_multi.yml for the
+  # full schema (name/dockerfile/context/target/buildArgs per entry).
+  - name: dockerImages
+    displayName: Multiple images to build/push (insecure-cli mode) — overrides dockerImageName when non-empty
+    type: object
+    default: []
   - name: dockerAlsoTagLatest
     displayName: Also push :latest (insecure-cli mode)
     type: boolean
@@ -166,7 +174,7 @@ stages:
             registry: ${{ parameters.dockerRegistry }}
             containerRegistry: ${{ parameters.containerRegistry }}
             projectVersion: $(version)
-      - ${{ if eq(parameters.dockerPushMode, 'insecure-cli') }}:
+      - ${{ if and(eq(parameters.dockerPushMode, 'insecure-cli'), eq(length(parameters.dockerImages), 0)) }}:
         - template: /jobs/docker_build_push_insecure.yml
           parameters:
             registry: ${{ parameters.dockerRegistry }}
@@ -174,6 +182,15 @@ stages:
             projectVersion: $(version)
             alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
             insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+      - ${{ if and(eq(parameters.dockerPushMode, 'insecure-cli'), ne(length(parameters.dockerImages), 0)) }}:
+        - template: /jobs/docker_build_push_insecure_multi.yml
+          parameters:
+            registry: ${{ parameters.dockerRegistry }}
+            appName: ${{ parameters.appName }}
+            projectVersion: $(version)
+            alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
+            insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+            dockerImages: ${{ parameters.dockerImages }}
 
   - stage: Deploy
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

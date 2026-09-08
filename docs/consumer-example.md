@@ -76,6 +76,33 @@ switch to `insecure-cli`:
       # containerRegistry no longer required in this mode
 ```
 
+**Multiple images from one repo** (e.g. API + Worker + Frontend, or one
+Dockerfile built twice with different `--target`). Set `dockerImages` — when
+non-empty it takes over from `dockerImageName`, one image per entry, each
+named `{appName}-{item.name}`:
+
+```yaml
+    parameters:
+      dockerPushMode: 'insecure-cli'
+      dockerRegistry: 'registry.internal:5000'
+      dockerImages:
+        - name: api
+          dockerfile: src/Api/Dockerfile
+          context: .
+        - name: frontend
+          dockerfile: src/Frontend/Dockerfile
+          context: src/Frontend
+        # Single Dockerfile, two build targets (e.g. ShopTemplate):
+        # - name: api
+        #   dockerfile: Dockerfile
+        #   target: api
+        # - name: frontend
+        #   dockerfile: Dockerfile
+        #   target: frontend
+        #   buildArgs: |
+        #     VITE_API_URL=$(SANDBOX_API_URL)
+```
+
 **Deploy mode.** By default (`deployMode: 'kube-manifest'`), this uses the
 `KubernetesManifest@0` task and needs a Kubernetes-type Azure DevOps
 environment resource. For an agent already running inside the target
