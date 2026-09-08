@@ -76,6 +76,22 @@ switch to `insecure-cli`:
       # containerRegistry no longer required in this mode
 ```
 
+**Deploy mode.** By default (`deployMode: 'kube-manifest'`), this uses the
+`KubernetesManifest@0` task and needs a Kubernetes-type Azure DevOps
+environment resource. For an agent already running inside the target
+cluster (matches every real consumer pipeline in the org's portfolio),
+switch to `helm`:
+
+```yaml
+    parameters:
+      deployMode: 'helm'
+      helmChartPath: 'helm/my-app'
+      helmValuesFile: 'helm/my-app/values-production.yaml'
+      helmSetValues: |
+        secrets.postgresPassword=$(POSTGRES_PASSWORD)
+        secrets.apiKey=$(API_KEY)
+```
+
 ### Java/Gradle
 
 ```yaml

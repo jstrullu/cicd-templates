@@ -130,6 +130,25 @@ image tagging is on unless explicitly turned off).
 
 ## Kubernetes Deployment Issues
 
+### "No service connection configured" / agent already inside the cluster
+
+If the self-hosted agent is already running inside the target k3s cluster
+(no kubeconfig needed — `kubectl`/`helm` just work), the default
+`KubernetesManifest@0`/`kube-deploy` path is the wrong tool: it expects a
+Kubernetes-type Azure DevOps environment resource or a `KUBECONFIG` secret
+that doesn't need to exist. Switch to the Helm-direct mode:
+
+- **Azure Pipelines:** `deployMode: 'helm'` on the pipeline parameters,
+  plus `helmChartPath`/`helmValuesFile`/`helmSetValues`.
+- **GitHub Actions:** `DEPLOY_MODE: 'helm'` in the workflow `env:` section,
+  plus `HELM_CHART_PATH`/`HELM_VALUES_FILE`. No `KUBECONFIG` secret needed
+  in this mode.
+
+Both modes clean up any stuck `pending-*` Helm revision before upgrading,
+run `helm upgrade --install --atomic`, verify the rollout, and dump
+diagnostics (pod status, recent events, Helm history) on failure — matching
+the pattern used by every real consumer pipeline in the org's portfolio.
+
 ### Token replacement not working
 
 The `kube_deploy` job replaces tokens in manifest files from `.kube/`. Ensure:

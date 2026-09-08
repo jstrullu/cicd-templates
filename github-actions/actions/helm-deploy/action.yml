@@ -1,0 +1,109 @@
+name: 'Helm Deploy'
+description: 'Déploiement Helm direct (upgrade --install --atomic), pour un runner déjà connecté au cluster cible (kubectl/helm sans kubeconfig)'
+
+inputs:
+  release-name:
+    description: 'Nom de la release Helm'
+    required: true
+  namespace:
+    description: 'Namespace Kubernetes cible'
+    required: true
+  chart-path:
+    description: 'Chemin vers le chart Helm, relatif à la racine du repo'
+    required: true
+  values-file:
+    description: 'Chemin vers le fichier values à appliquer, relatif à la racine du repo'
+    required: false
+    default: ''
+  image-tag:
+    description: 'Tag d''image à définir via --set image.tag (vide = ignoré)'
+    required: false
+    default: ''
+  set-values:
+    description: 'Paires --set-string KEY=VALUE supplémentaires, une par ligne (ex. secrets.postgresPassword=...)'
+    required: false
+    default: ''
+  deployment-name:
+    description: 'Nom du déploiement à surveiller pour le rollout status (défaut : release-name)'
+    required: false
+    default: ''
+  timeout:
+    description: 'Timeout Helm/kubectl'
+    required: false
+    default: '5m'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Récupération/nettoyage d'une release Helm bloquée
+      shell: bash
+      run: |
+        NS="${{ inputs.namespace }}"
+        RELEASE="${{ inputs.release-name }}"
+        echo "=== Current Helm history ==="
+        helm history "$RELEASE" -n "$NS" --max 10 2>/dev/null || echo "(no release)"
+        PENDING_REVS=$(helm history "$RELEASE" -n "$NS" --max 20 2>/dev/null | grep 'pending-' | awk '{print $1}')
+        for REV in $PENDING_REVS; do
+          SECRET_NAME="sh.helm.release.v1.$RELEASE.v${REV}"
+          echo "Deleting stuck revision $REV -> secret/$SECRET_NAME"
+          kubectl delete secret "$SECRET_NAME" -n "$NS" --ignore-not-found
+          kubectl delete configmap "$SECRET_NAME" -n "$NS" --ignore-not-found
+        done
+
+    - name: helm upgrade --install
+      shell: bash
+      run: |
+        set -euo pipefail
+        NS="${{ inputs.namespace }}"
+        RELEASE="${{ inputs.release-name }}"
+        CHART="${{ inputs.chart-path }}"
+
+        ARGS=(upgrade --install "$RELEASE" "$CHART" --namespace "$NS" --create-namespace)
+
+        VALUES_FILE="${{ inputs.values-file }}"
+        if [ -n "$VALUES_FILE" ]; then
+          ARGS+=(-f "$VALUES_FILE")
+        fi
+
+        IMAGE_TAG="${{ inputs.image-tag }}"
+        if [ -n "$IMAGE_TAG" ]; then
+          ARGS+=(--set "image.tag=$IMAGE_TAG")
+        fi
+
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          ARGS+=(--set-string "$line")
+        done <<< "${{ inputs.set-values }}"
+
+        ARGS+=(--atomic --timeout "${{ inputs.timeout }}")
+
+        echo "Running: helm ${ARGS[*]}"
+        helm "${ARGS[@]}"
+
+    - name: Verify rollout status
+      shell: bash
+      run: |
+        DEPLOYMENT="${{ inputs.deployment-name }}"
+        if [ -z "$DEPLOYMENT" ]; then
+          DEPLOYMENT="${{ inputs.release-name }}"
+        fi
+        kubectl rollout status "deployment/$DEPLOYMENT" -n "${{ inputs.namespace }}" --timeout="${{ inputs.timeout }}"
+
+    - name: Show pod status
+      shell: bash
+      run: kubectl get pods -n "${{ inputs.namespace }}" -o wide
+
+    - name: Diagnose deployment failure
+      if: failure()
+      shell: bash
+      run: |
+        NS="${{ inputs.namespace }}"
+        RELEASE="${{ inputs.release-name }}"
+        echo "=== Pod status ==="
+        kubectl get pods -n "$NS" -o wide
+        echo ""
+        echo "=== Recent events (last 30) ==="
+        kubectl get events -n "$NS" --sort-by='.lastTimestamp' 2>/dev/null | tail -30
+        echo ""
+        echo "=== Helm history ==="
+        helm history "$RELEASE" -n "$NS" --max 5 2>/dev/null || echo "(no release)"

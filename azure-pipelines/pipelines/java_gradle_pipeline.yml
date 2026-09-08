@@ -75,6 +75,30 @@ parameters:
     displayName: Configure this registry as insecure on the agent (insecure-cli mode, leave empty if already configured)
     type: string
     default: ''
+  # kube-manifest (default): KubernetesManifest@0 task, needs a Kubernetes-type
+  #   Azure DevOps environment resource (kubeconfig) — unchanged behavior.
+  # helm: helm upgrade --install direct on an agent already inside the target
+  #   cluster (no kubeconfig needed), matching every real consumer pipeline
+  #   in the org's portfolio.
+  - name: deployMode
+    displayName: Deploy mode
+    type: string
+    default: kube-manifest
+    values:
+      - kube-manifest
+      - helm
+  - name: helmChartPath
+    displayName: Path to the Helm chart (helm mode)
+    type: string
+    default: ''
+  - name: helmValuesFile
+    displayName: Path to the Helm values file (helm mode)
+    type: string
+    default: ''
+  - name: helmSetValues
+    displayName: Extra --set-string KEY=VALUE pairs, one per line (helm mode)
+    type: string
+    default: ''
   - name: enableMutationTesting
     displayName: Enable mutation testing
     type: boolean
@@ -158,11 +182,21 @@ stages:
       BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
       deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
     jobs:
-      - template: /jobs/kube_deploy.yml
-        parameters:
-          env: $(deployEnv)
-          resource: ${{ parameters.appName }}
-          namespace: ${{ parameters.appName }}
+      - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
+        - template: /jobs/kube_deploy.yml
+          parameters:
+            env: $(deployEnv)
+            resource: ${{ parameters.appName }}
+            namespace: ${{ parameters.appName }}
+      - ${{ if eq(parameters.deployMode, 'helm') }}:
+        - template: /jobs/helm_deploy.yml
+          parameters:
+            releaseName: ${{ parameters.appName }}
+            namespace: ${{ parameters.appName }}
+            chartPath: ${{ parameters.helmChartPath }}
+            valuesFile: ${{ parameters.helmValuesFile }}
+            imageTag: $(BUILDID)
+            setValues: ${{ parameters.helmSetValues }}
 
   - stage: Finalization
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))

@@ -20,6 +20,13 @@ env:
   # insecure-cli: docker build/push CLI direct vers un registry self-hosted/in-cluster
   #   sans authentification, comme le fait chaque pipeline réel du portefeuille.
   DOCKER_PUSH_MODE: 'service-connection'   # service-connection ou insecure-cli
+  # kube-manifest (default): kubectl apply, nécessite le secret KUBECONFIG.
+  # helm: helm upgrade --install direct sur un runner déjà connecté au cluster
+  #   cible (aucun kubeconfig requis), comme le fait chaque pipeline réel du
+  #   portefeuille.
+  DEPLOY_MODE: 'kube-manifest'             # kube-manifest ou helm
+  HELM_CHART_PATH: ''                       # chemin du chart Helm (mode helm)
+  HELM_VALUES_FILE: ''                      # fichier values Helm (mode helm)
   KUBE_NAMESPACE: ''          # Namespace Kubernetes cible
 
 jobs:
@@ -101,13 +108,23 @@ jobs:
     environment: Dev
     steps:
       - uses: actions/checkout@v4
-      - name: Déploiement Kubernetes
+      - name: Déploiement Kubernetes (kube-manifest)
+        if: ${{ env.DEPLOY_MODE == 'kube-manifest' }}
         uses: jstrullu/cicd-templates/github-actions/actions/kube-deploy@master
         env:
           BUILDID: ${{ needs.initialisation.outputs.docker-tag }}
         with:
           namespace: ${{ env.KUBE_NAMESPACE }}
           kubeconfig: ${{ secrets.KUBECONFIG }}
+      - name: Déploiement Helm
+        if: ${{ env.DEPLOY_MODE == 'helm' }}
+        uses: jstrullu/cicd-templates/github-actions/actions/helm-deploy@master
+        with:
+          release-name: ${{ env.KUBE_NAMESPACE }}
+          namespace: ${{ env.KUBE_NAMESPACE }}
+          chart-path: ${{ env.HELM_CHART_PATH }}
+          values-file: ${{ env.HELM_VALUES_FILE }}
+          image-tag: ${{ needs.initialisation.outputs.docker-tag }}
 
   finalisation:
     runs-on: ubuntu-latest

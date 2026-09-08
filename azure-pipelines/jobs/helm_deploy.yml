@@ -1,0 +1,131 @@
+parameters:
+  - name: releaseName
+    type: string
+  - name: namespace
+    type: string
+  - name: chartPath
+    displayName: Path to the Helm chart, relative to repo root
+    type: string
+  - name: valuesFile
+    displayName: Path to the values file to apply, relative to repo root
+    type: string
+    default: ''
+  - name: imageTag
+    displayName: Image tag to set via --set image.tag (leave empty to skip)
+    type: string
+    default: ''
+  - name: setValues
+    displayName: Extra --set-string KEY=VALUE pairs, one per line (e.g. secrets.postgresPassword=$(POSTGRES_PASSWORD))
+    type: string
+    default: ''
+  - name: deploymentName
+    displayName: Deployment name to wait on for rollout status (defaults to releaseName)
+    type: string
+    default: ''
+  - name: timeout
+    type: string
+    default: '5m'
+
+# Helm CLI direct — for a self-hosted agent that already runs inside the
+# target k3s cluster (kubectl/helm have cluster access with no kubeconfig
+# needed). Matches the pattern used by every real consumer pipeline in the
+# org's portfolio: clean up any stuck 'pending-*' Helm revision first, then
+# `helm upgrade --install --atomic`, then verify the rollout, then dump
+# diagnostics on failure. Unlike kube_deploy.yml (KubernetesManifest@0), this
+# needs no Kubernetes-type environment resource and no kubeconfig secret.
+jobs:
+  - job: helm_deploy
+    displayName: 'Helm deploy to ${{ parameters.namespace }}'
+    timeoutInMinutes: 20
+    steps:
+      - checkout: self
+        clean: true
+
+      - script: |
+          NS="${{ parameters.namespace }}"
+          RELEASE="${{ parameters.releaseName }}"
+          echo "=== Current Helm history ==="
+          helm history "$RELEASE" -n "$NS" --max 10 2>/dev/null || echo "(no release)"
+          PENDING_REVS=$(helm history "$RELEASE" -n "$NS" --max 20 2>/dev/null | grep 'pending-' | awk '{print $1}')
+          for REV in $PENDING_REVS; do
+            SECRET_NAME="sh.helm.release.v1.$RELEASE.v${REV}"
+            echo "Deleting stuck revision $REV -> secret/$SECRET_NAME"
+            kubectl delete secret "$SECRET_NAME" -n "$NS" --ignore-not-found
+            kubectl delete configmap "$SECRET_NAME" -n "$NS" --ignore-not-found
+          done
+          echo "=== Helm history after cleanup ==="
+          helm history "$RELEASE" -n "$NS" --max 10 2>/dev/null || echo "(no release)"
+        displayName: 'Recover failed Helm release (if any)'
+
+      - script: |
+          set -euo pipefail
+          NS="${{ parameters.namespace }}"
+          RELEASE="${{ parameters.releaseName }}"
+          CHART="${{ parameters.chartPath }}"
+
+          ARGS=(upgrade --install "$RELEASE" "$CHART" --namespace "$NS" --create-namespace)
+
+          VALUES_FILE="${{ parameters.valuesFile }}"
+          if [ -n "$VALUES_FILE" ]; then
+            ARGS+=(-f "$VALUES_FILE")
+          fi
+
+          IMAGE_TAG="${{ parameters.imageTag }}"
+          if [ -n "$IMAGE_TAG" ]; then
+            ARGS+=(--set "image.tag=$IMAGE_TAG")
+          fi
+
+          # One --set-string per non-empty line of setValues. Values come
+          # through as literal expanded strings (pipeline variables already
+          # resolved before this script runs) — same convention every real
+          # consumer pipeline in the portfolio already uses for secrets.
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            ARGS+=(--set-string "$line")
+          done <<< "${{ parameters.setValues }}"
+
+          ARGS+=(--atomic --timeout "${{ parameters.timeout }}")
+
+          echo "Running: helm ${ARGS[*]}"
+          helm "${ARGS[@]}"
+        displayName: 'helm upgrade --install'
+
+      - script: |
+          DEPLOYMENT="${{ parameters.deploymentName }}"
+          if [ -z "$DEPLOYMENT" ]; then
+            DEPLOYMENT="${{ parameters.releaseName }}"
+          fi
+          kubectl rollout status "deployment/$DEPLOYMENT" -n "${{ parameters.namespace }}" --timeout="${{ parameters.timeout }}"
+        displayName: 'Verify rollout status'
+
+      - script: kubectl get pods -n ${{ parameters.namespace }} -o wide
+        displayName: 'Show pod status'
+
+      - script: |
+          NS="${{ parameters.namespace }}"
+          RELEASE="${{ parameters.releaseName }}"
+          echo "=== Pod status ==="
+          kubectl get pods -n "$NS" -o wide
+          echo ""
+          echo "=== Recent events (last 30) ==="
+          kubectl get events -n "$NS" --sort-by='.lastTimestamp' 2>/dev/null | tail -30
+          echo ""
+          echo "=== Non-ready pods ==="
+          NOT_READY=$(kubectl get pods -n "$NS" --no-headers | grep -v -E '([0-9]+)/\1' | awk '{print $1}')
+          if [ -n "$NOT_READY" ]; then
+            for pod in $NOT_READY; do
+              echo "--- describe $pod ---"
+              kubectl describe pod "$pod" -n "$NS"
+              echo ""
+              echo "--- logs $pod (last 50 lines, all containers) ---"
+              kubectl logs "$pod" -n "$NS" --all-containers --tail=50 2>/dev/null || true
+              echo ""
+            done
+          else
+            echo "All pods are ready"
+          fi
+          echo ""
+          echo "=== Helm history ==="
+          helm history "$RELEASE" -n "$NS" --max 5 2>/dev/null || echo "(no release)"
+        condition: failed()
+        displayName: 'Diagnose deployment failure'
