@@ -32,6 +32,19 @@ parameters:
   - name: hotfixIncrement
     type: string
     default: patch
+  # semver (default): cicd.json + PR title override (#VERSION major/minor/patch).
+  #   The PR-title override needs a PR-based flow to do anything useful.
+  # git-sha: tag = short git SHA (git rev-parse --short=7 HEAD), no cicd.json
+  #   read/write, no git tag, no Finalization commit. Matches what every real
+  #   consumer pipeline in this repo's portfolio actually does today, and
+  #   works with pr: none / trigger-only pipelines where the PR-title
+  #   mechanism has nothing to read.
+  - name: versioningStrategy
+    type: string
+    default: semver
+    values:
+      - semver
+      - git-sha
 
 jobs:
   - job: Versioning
@@ -46,71 +59,101 @@ jobs:
         developIncrement: ${{ parameters.developIncrement }}
         releaseIncrement: ${{ parameters.releaseIncrement }}
         hotfixIncrement: ${{ parameters.hotfixIncrement }}
-    - template: ..\steps\set_version_increment.yml
-      parameters:
-        versionIncrement: ${{ parameters.versionIncrement }}
-    # Apply git flow branch-specific increment when PR title did not override
-    - bash: |
-        echo "Applying git flow increment: $(gitflow.versionIncrement)"
-        echo "##vso[task.setvariable variable=versionIncrement;]$(gitflow.versionIncrement)"
-      displayName: 'Apply git flow version increment'
-      condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'), ne(variables['gitflow.versionIncrement'], ''), eq(variables['versionIncrementFromPR'], ''))
-    - task: shellexec@0
-      displayName: Create file ${{ parameters.jsonFile }} if it does not exist
-      inputs:
-        code: |
-          test -f "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}" || echo "{\"version\": \"0.0.0\"}" > "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}"
-          git add ${{ parameters.jsonFile }}
-    - task: LoadJsonVariables@2
-      displayName: Load current version
-      inputs:
-        JsonSource: ${{ parameters.jsonFile }}
-        VariablePrefix: cicd
-        MarkAsSecret: false    
-    - task: Npm@1
-      displayName: Install semver
-      inputs:
-        command: 'custom'
-        customCommand: 'install semver -g'
-    - task: CmdLine@1
-      displayName: Bump version
-      inputs:
-        filename: sh
-        arguments: -c "echo \"##vso[task.setvariable variable=releaseVersion;]`semver $(cicd_version) -i $(versionIncrement)`\"
-      condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'))
-    - bash: |
-        echo "No version bump — using existing version: $(cicd_version)"
-        echo "##vso[task.setvariable variable=releaseVersion;]$(cicd_version)"
-      displayName: 'Use existing version (no bump)'
-      condition: and(succeeded(), eq(variables['gitflow.versionIncrement'], 'none'))
-    - bash: |
-        VERSION="$(releaseVersion)"
-        SUFFIX="$(gitflow.versionSuffix)"
-        if [ -n "$SUFFIX" ]; then
-          FULL_VERSION="${VERSION}${SUFFIX}"
-        else
-          FULL_VERSION="${VERSION}"
-        fi
-        echo "##vso[task.setvariable variable=DockerTag;isOutput=true]$(echo "$FULL_VERSION" | tr '[:upper:]' '[:lower:]')"
-      name: version
-      displayName: 'Record artifact version'
-    
-    - task: CmdLine@1
-      displayName: Update pipeline name
-      inputs:
-        filename: sh
-        arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
-      condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
-    - task: CmdLine@1
-      displayName: Update PR pipeline name
-      inputs:
-        filename: sh
-        arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) PR $(System.PullRequest.PullRequestId).$(System.PullRequest.PullRequestIteration)"'
-      condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+        versioningStrategy: ${{ parameters.versioningStrategy }}
 
-    - task: CmdLine@1
-      displayName: Save version
-      inputs:
-        filename: sh
-        arguments: -c "echo \"##vso[task.setvariable variable=Version;isOutput=true]$(releaseVersion)\"
-      name: semantic
+    - ${{ if eq(parameters.versioningStrategy, 'git-sha') }}:
+      - bash: |
+          SHA=$(git rev-parse --short=7 HEAD)
+          echo "Using git-sha versioning strategy: $SHA"
+          echo "##vso[task.setvariable variable=releaseVersion;]$SHA"
+          echo "##vso[task.setvariable variable=DockerTag;isOutput=true]$SHA"
+        name: version
+        displayName: 'Record artifact version (git-sha)'
+      - task: CmdLine@1
+        displayName: Update pipeline name
+        inputs:
+          filename: sh
+          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: Update PR pipeline name
+        inputs:
+          filename: sh
+          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) PR $(System.PullRequest.PullRequestId).$(System.PullRequest.PullRequestIteration)"'
+        condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: Save version
+        inputs:
+          filename: sh
+          arguments: -c "echo \"##vso[task.setvariable variable=Version;isOutput=true]$(releaseVersion)\""
+        name: semantic
+
+    - ${{ if eq(parameters.versioningStrategy, 'semver') }}:
+      - template: ..\steps\set_version_increment.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+      # Apply git flow branch-specific increment when PR title did not override
+      - bash: |
+          echo "Applying git flow increment: $(gitflow.versionIncrement)"
+          echo "##vso[task.setvariable variable=versionIncrement;]$(gitflow.versionIncrement)"
+        displayName: 'Apply git flow version increment'
+        condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'), ne(variables['gitflow.versionIncrement'], ''), eq(variables['versionIncrementFromPR'], ''))
+      - task: shellexec@0
+        displayName: Create file ${{ parameters.jsonFile }} if it does not exist
+        inputs:
+          code: |
+            test -f "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}" || echo "{\"version\": \"0.0.0\"}" > "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}"
+            git add ${{ parameters.jsonFile }}
+      - task: LoadJsonVariables@2
+        displayName: Load current version
+        inputs:
+          JsonSource: ${{ parameters.jsonFile }}
+          VariablePrefix: cicd
+          MarkAsSecret: false
+      - task: Npm@1
+        displayName: Install semver
+        inputs:
+          command: 'custom'
+          customCommand: 'install semver -g'
+      - task: CmdLine@1
+        displayName: Bump version
+        inputs:
+          filename: sh
+          arguments: -c "echo \"##vso[task.setvariable variable=releaseVersion;]`semver $(cicd_version) -i $(versionIncrement)`\""
+        condition: and(succeeded(), ne(variables['gitflow.versionIncrement'], 'none'))
+      - bash: |
+          echo "No version bump — using existing version: $(cicd_version)"
+          echo "##vso[task.setvariable variable=releaseVersion;]$(cicd_version)"
+        displayName: 'Use existing version (no bump)'
+        condition: and(succeeded(), eq(variables['gitflow.versionIncrement'], 'none'))
+      - bash: |
+          VERSION="$(releaseVersion)"
+          SUFFIX="$(gitflow.versionSuffix)"
+          if [ -n "$SUFFIX" ]; then
+            FULL_VERSION="${VERSION}${SUFFIX}"
+          else
+            FULL_VERSION="${VERSION}"
+          fi
+          echo "##vso[task.setvariable variable=DockerTag;isOutput=true]$(echo "$FULL_VERSION" | tr '[:upper:]' '[:lower:]')"
+        name: version
+        displayName: 'Record artifact version'
+
+      - task: CmdLine@1
+        displayName: Update pipeline name
+        inputs:
+          filename: sh
+          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      - task: CmdLine@1
+        displayName: Update PR pipeline name
+        inputs:
+          filename: sh
+          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) PR $(System.PullRequest.PullRequestId).$(System.PullRequest.PullRequestIteration)"'
+        condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+
+      - task: CmdLine@1
+        displayName: Save version
+        inputs:
+          filename: sh
+          arguments: -c "echo \"##vso[task.setvariable variable=Version;isOutput=true]$(releaseVersion)\""
+        name: semantic

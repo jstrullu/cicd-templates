@@ -33,6 +33,13 @@ parameters:
     displayName: Version increment for hotfix branches (gitflow)
     type: string
     default: patch
+  - name: versioningStrategy
+    displayName: Versioning strategy
+    type: string
+    default: semver
+    values:
+      - semver
+      - git-sha
   - name: gradlePath
     type: string
   - name: javaVersion
@@ -57,6 +64,7 @@ stages:
           developIncrement: ${{ parameters.developIncrement }}
           releaseIncrement: ${{ parameters.releaseIncrement }}
           hotfixIncrement: ${{ parameters.hotfixIncrement }}
+          versioningStrategy: ${{ parameters.versioningStrategy }}
   - ${{ if eq(parameters.enableSecurityChecks, true) }}:
     - stage: Security_Checks
       dependsOn: Initialization

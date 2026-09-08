@@ -36,6 +36,12 @@ parameters:
   - name: hotfixIncrement
     type: string
     default: patch
+  - name: versioningStrategy
+    type: string
+    default: semver
+    values:
+      - semver
+      - git-sha
 
 steps:
   - bash: |
@@ -43,6 +49,7 @@ steps:
       FULL_BRANCH="$(Build.SourceBranch)"
       BUILD_REASON="$(Build.Reason)"
       GIT_FLOW_TYPE="${{ parameters.gitFlowType }}"
+      VERSIONING_STRATEGY="${{ parameters.versioningStrategy }}"
 
       SHOULD_DEPLOY="false"
       DEPLOY_ENV=""
@@ -132,6 +139,14 @@ steps:
           ;;
 
       esac
+
+      # git-sha strategy has no semver version to tag or persist — force off
+      # regardless of branch policy, so consumers don't get a spurious
+      # Finalization commit/tag with nothing meaningful to write.
+      if [ "$VERSIONING_STRATEGY" = "git-sha" ]; then
+        SHOULD_TAG="false"
+        SHOULD_FINALIZE="false"
+      fi
 
       echo "=== Git Flow Context ==="
       echo "Strategy:       $GIT_FLOW_TYPE"

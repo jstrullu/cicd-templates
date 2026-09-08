@@ -10,7 +10,28 @@ paths:
 
 # Semantic Versioning System
 
-## Flow
+## Two strategies
+
+- **`semver`** (default) — cicd.json + PR title override. Requires a
+  PR-based flow to make full use of the override.
+- **`git-sha`** — tag = short git SHA (`git rev-parse --short=7 HEAD`), no
+  `cicd.json` read/write, no git tag, no Finalization commit. Matches what
+  every real consumer pipeline in the org's portfolio actually does today,
+  and is the only option that works with `pr: none` / trigger-only
+  pipelines (the PR-title mechanism has nothing to read there).
+
+  Azure parameter: `versioningStrategy: 'semver' | 'git-sha'` on the
+  pipeline entry point (propagated down to `json_semantic_version.yml` and
+  `resolve_gitflow_context.yml`).
+  GitHub Actions input: `versioning-strategy: 'semver' | 'git-sha'` on the
+  `semantic-version` composite action.
+
+  In `git-sha` mode, `resolve_gitflow_context.yml` forces `shouldTag` and
+  `shouldFinalize` to `false` regardless of git flow branch policy — there
+  is no semver version to tag or persist, so Finalization would otherwise
+  fire a commit with nothing meaningful to write.
+
+## Flow (semver strategy)
 
 1. **Read** — `cicd.json` from consumer repo root: `{"version": "1.2.3"}`
 2. **Check override** — PR title scanned for `#VERSION MAJOR/MINOR/PATCH`

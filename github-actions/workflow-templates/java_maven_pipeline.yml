@@ -10,6 +10,7 @@ on:
 
 env:
   VERSION_INCREMENT: 'patch'
+  VERSIONING_STRATEGY: 'semver'      # semver ou git-sha
   FICHIER_JSON: 'cicd.json'
   SONAR_KEY: ''               # Clé du projet SonarQube
   JAVA_VERSION: '17'
@@ -33,6 +34,7 @@ jobs:
         uses: jstrullu/cicd-templates/github-actions/actions/semantic-version@master
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
+          versioning-strategy: ${{ env.VERSIONING_STRATEGY }}
           fichier-json: ${{ env.FICHIER_JSON }}
 
   build-and-test:

@@ -33,6 +33,13 @@ parameters:
     displayName: Version increment for hotfix branches (gitflow)
     type: string
     default: patch
+  - name: versioningStrategy
+    displayName: Versioning strategy
+    type: string
+    default: semver
+    values:
+      - semver
+      - git-sha
   - name: goVersion
     displayName: Go version
     type: string
@@ -72,6 +79,7 @@ stages:
           developIncrement: ${{ parameters.developIncrement }}
           releaseIncrement: ${{ parameters.releaseIncrement }}
           hotfixIncrement: ${{ parameters.hotfixIncrement }}
+          versioningStrategy: ${{ parameters.versioningStrategy }}
 
   - stage: Build_And_Test
     dependsOn: Initialization

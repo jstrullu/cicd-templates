@@ -34,6 +34,17 @@ In gitflow mode, `main`/`master` does **not** bump — it inherits the version f
 - `developIncrement`, `releaseIncrement`, `hotfixIncrement` are set as desired
 - You're merging from the correct branch
 
+### `pr: none` pipelines never bump the version
+
+The `semver` strategy's PR-title override (`#VERSION minor`) has nothing to
+read when the pipeline never runs on a PR (`pr: none`, trigger-only). It
+still works — `cicd.json` gets bumped by `versionIncrement`'s default level
+on every run — but the override never fires. If your pipeline doesn't use
+Pull Requests, either accept the default bump level on every run, or switch
+to the `git-sha` strategy (`versioningStrategy: 'git-sha'` / GitHub Actions
+`versioning-strategy: 'git-sha'`), which tags with the short git SHA instead
+and needs no PR to do anything meaningful.
+
 ---
 
 ## SonarQube Issues

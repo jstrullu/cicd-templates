@@ -10,19 +10,38 @@ inputs:
     description: 'Nom du fichier JSON de version'
     required: true
     default: 'cicd.json'
+  # semver (default): cicd.json + override via titre de PR (#VERSION major/minor/patch),
+  #   suppose un flux avec Pull Requests pour utiliser pleinement l'override.
+  # git-sha: tag = SHA git court (git rev-parse --short=7 HEAD), pas de lecture/écriture
+  #   de cicd.json. Correspond à ce que fait déjà chaque pipeline réel du portefeuille
+  #   de ce repo, et fonctionne sans flux PR.
+  versioning-strategy:
+    description: 'Stratégie de versionnement : semver ou git-sha'
+    required: false
+    default: 'semver'
 
 outputs:
   version:
-    description: 'Version sémantique après bump (ex: 1.2.3)'
-    value: ${{ steps.bump.outputs.version }}
+    description: 'Version sémantique après bump (ex: 1.2.3), ou SHA git court en mode git-sha'
+    value: ${{ steps.bump.outputs.version || steps.git-sha.outputs.version }}
   docker-tag:
-    description: 'Tag Docker au format version (ex: 1.2.3)'
-    value: ${{ steps.bump.outputs.docker-tag }}
+    description: 'Tag Docker au format version (ex: 1.2.3), ou SHA git court en mode git-sha'
+    value: ${{ steps.bump.outputs.docker-tag || steps.git-sha.outputs.docker-tag }}
 
 runs:
   using: 'composite'
   steps:
+    - name: Versionnement git-sha
+      if: inputs.versioning-strategy == 'git-sha'
+      id: git-sha
+      shell: bash
+      run: |
+        sha=$(git rev-parse --short=7 HEAD)
+        echo "version=$sha" >> "$GITHUB_OUTPUT"
+        echo "docker-tag=$sha" >> "$GITHUB_OUTPUT"
+
     - name: Création du fichier ${{ inputs.fichier-json }} s'il n'existe pas
+      if: inputs.versioning-strategy == 'semver'
       shell: bash
       run: |
         if [ ! -f "${{ inputs.fichier-json }}" ]; then
@@ -31,6 +50,7 @@ runs:
         git add "${{ inputs.fichier-json }}"
 
     - name: Récupération de la version en cours
+      if: inputs.versioning-strategy == 'semver'
       id: current
       shell: bash
       run: |
@@ -38,6 +58,7 @@ runs:
         echo "version=$current_version" >> "$GITHUB_OUTPUT"
 
     - name: Détection du niveau de bump depuis la PR
+      if: inputs.versioning-strategy == 'semver'
       id: detect-increment
       shell: bash
       env:
@@ -65,10 +86,12 @@ runs:
         echo "increment=$increment" >> "$GITHUB_OUTPUT"
 
     - name: Installation de semver
+      if: inputs.versioning-strategy == 'semver'
       shell: bash
       run: npm install -g semver
 
     - name: Bump de la version
+      if: inputs.versioning-strategy == 'semver'
       id: bump
       shell: bash
       run: |
