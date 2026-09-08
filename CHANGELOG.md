@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - adding badges for CI status and released version
 
 ### Changed
+- CICD-17: per-stage Docker rebuilds for staged Helm deploy (ShopTemplate)
 - CICD-20: multi-client monorepo support on the Astro stack (RestoTemplate)
 - CICD-16: --build-arg support on the mono-image insecure-cli Docker job
 - CICD-13: Sandbox -> Prod staged deploy with manual approval (helm mode)
