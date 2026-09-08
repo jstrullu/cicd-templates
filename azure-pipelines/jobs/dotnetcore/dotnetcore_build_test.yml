@@ -64,18 +64,25 @@ jobs:
           projects: '**/*.csproj'
           arguments: '--no-restore -c Release'
       - task: DotNetCoreCLI@2
-        displayName: 'Unit tests'
+        displayName: 'Unit tests (coverlet.collector, cross-platform)'
         inputs:
           command: 'test'
           projects: |
             **/*Tests.*.csproj
-          arguments: '--no-build -c Release --logger trx;LogFileName=TEST.xml /p:CollectCoverage=true /p:CoverletOutputFormat=opencover'
+          # XPlat Code Coverage = coverlet.collector, works on Linux/macOS/Windows
+          # (unlike the old VSTest "Code coverage" collector, Windows-only).
+          # Requires the consumer's test project to reference coverlet.collector.
+          # cobertura feeds ReportGenerator/PublishCodeCoverageResults below,
+          # opencover feeds the optional Sonar step.
+          #
+          # KNOWN LIMITATION: coverlet.collector is NOT compatible with the
+          # Microsoft Testing Platform (MTP, opt-in via <TestingPlatformDotnetTestSupport>
+          # or enabled by some .NET 10 project templates) — it relies on the VSTest
+          # data collector infrastructure, which MTP does not support. On an MTP
+          # project this collects nothing silently (no error, empty coverage).
+          # If that's your setup, this job is not the right fit as-is.
+          arguments: '--no-build -c Release --logger trx;LogFileName=TEST.xml --collect:"XPlat Code Coverage;Format=cobertura,opencover"'
           publishTestResults: false
-      - task: DotNetCoreCLI@2
-        inputs:
-          command: test
-          projects: '**/*Tests.*.csproj'
-          arguments: '--configuration $(buildConfiguration) --collect "Code coverage"'
       - script: |
           files=$(find $(pwd)/ -name coverage.opencover.xml -type f -print0 | tr '\0' ';')
           echo $files

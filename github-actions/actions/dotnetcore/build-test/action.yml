@@ -74,21 +74,22 @@ runs:
       shell: bash
       run: dotnet build --no-restore -c Release
 
-    - name: Tests unitaires
+    - name: Tests unitaires (coverlet.collector, cross-platform)
       shell: bash
+      # XPlat Code Coverage = coverlet.collector, fonctionne sur Linux/macOS/Windows
+      # (contrairement à l'ancien collecteur VSTest "Code coverage", Windows-only —
+      # cassant sur ubuntu-latest, le runner par défaut de ce repo).
+      # Nécessite que le projet de tests consommateur référence coverlet.collector.
+      #
+      # LIMITE CONNUE : coverlet.collector n'est PAS compatible avec le Microsoft
+      # Testing Platform (MTP) — il repose sur l'infrastructure VSTest data collector,
+      # que MTP ne supporte pas. Sur un projet MTP, la couverture est silencieusement
+      # vide (pas d'erreur). Si c'est votre cas, cette action ne convient pas telle quelle.
       run: |
         dotnet test **/*Tests.*.csproj \
           --no-build -c Release \
           --logger "trx;LogFileName=TEST.xml" \
-          /p:CollectCoverage=true \
-          /p:CoverletOutputFormat=opencover || true
-
-    - name: Tests avec couverture
-      shell: bash
-      run: |
-        dotnet test **/*Tests.*.csproj \
-          --configuration Release \
-          --collect "Code coverage" || true
+          --collect:"XPlat Code Coverage;Format=cobertura,opencover" || true
 
     - name: SonarQube End
       if: inputs.sonar-project-key != ''
