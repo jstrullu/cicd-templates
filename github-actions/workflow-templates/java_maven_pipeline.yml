@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
       - name: Versionnement sémantique
         id: versioning
-        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        uses: jstrullu/cicd-templates/github-actions/actions/semantic-version@master
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
           fichier-json: ${{ env.FICHIER_JSON }}
@@ -41,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build & Test Java Maven
-        uses: jstrullu/cicd/github-actions/actions/java/maven-build-test@master
+        uses: jstrullu/cicd-templates/github-actions/actions/java/maven-build-test@master
         with:
           java-version: ${{ env.JAVA_VERSION }}
           pom-file: ${{ env.POM_FILE }}
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Vérifications de sécurité
-        uses: jstrullu/cicd/github-actions/actions/java/security-checks@master
+        uses: jstrullu/cicd-templates/github-actions/actions/java/security-checks@master
         with:
           target-file: ${{ env.POM_FILE }}
           snyk-token: ${{ secrets.SNYK_TOKEN }}
@@ -74,7 +74,7 @@ jobs:
           name: drop
           path: ${{ github.workspace }}
       - name: Docker Build & Push
-        uses: jstrullu/cicd/github-actions/actions/docker-build-push@master
+        uses: jstrullu/cicd-templates/github-actions/actions/docker-build-push@master
         with:
           registry: ${{ env.DOCKER_REGISTRY }}
           image-name: ${{ github.event.repository.name }}
@@ -90,7 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Déploiement Kubernetes
-        uses: jstrullu/cicd/github-actions/actions/kube-deploy@master
+        uses: jstrullu/cicd-templates/github-actions/actions/kube-deploy@master
         env:
           BUILDID: ${{ needs.initialisation.outputs.docker-tag }}
         with:
@@ -106,7 +106,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Finalisation
-        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        uses: jstrullu/cicd-templates/github-actions/actions/finalisation@master
         with:
           release-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}

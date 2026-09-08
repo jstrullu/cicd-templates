@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
       - name: Flutter Version Increment
         id: versioning
-        uses: jstrullu/cicd/github-actions/actions/flutter/version-increment@master
+        uses: jstrullu/cicd-templates/github-actions/actions/flutter/version-increment@master
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
 
@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build & Deploy Firebase Dev
-        uses: jstrullu/cicd/github-actions/actions/flutter/build-firebase-deploy@master
+        uses: jstrullu/cicd-templates/github-actions/actions/flutter/build-firebase-deploy@master
         with:
           sonar-key: ${{ env.SONAR_KEY }}
           environment: 'dev'
@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build & Deploy Firebase Prod
-        uses: jstrullu/cicd/github-actions/actions/flutter/build-firebase-deploy@master
+        uses: jstrullu/cicd-templates/github-actions/actions/flutter/build-firebase-deploy@master
         with:
           sonar-key: ${{ env.SONAR_KEY }}
           environment: 'prod'

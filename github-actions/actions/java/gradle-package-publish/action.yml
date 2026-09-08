@@ -31,7 +31,7 @@ runs:
         path: ${{ github.workspace }}
 
     - name: Mise à jour du fichier de version
-      uses: jstrullu/cicd/github-actions/actions/set-version-file@master
+      uses: jstrullu/cicd-templates/github-actions/actions/set-version-file@master
       with:
         fichier-json: ${{ inputs.fichier-json }}
         release-version: ${{ inputs.project-version }}

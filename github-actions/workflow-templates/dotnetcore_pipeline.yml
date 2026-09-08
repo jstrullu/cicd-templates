@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
       - name: Versionnement sémantique
         id: versioning
-        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        uses: jstrullu/cicd-templates/github-actions/actions/semantic-version@master
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
           fichier-json: ${{ env.FICHIER_JSON }}
@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build & Test .NET Core
-        uses: jstrullu/cicd/github-actions/actions/dotnetcore/build-test@master
+        uses: jstrullu/cicd-templates/github-actions/actions/dotnetcore/build-test@master
         with:
           sonar-project-key: ${{ env.SONAR_KEY }}
           project-file: ${{ env.PROJECT_FILE }}
@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Vérifications de sécurité
-        uses: jstrullu/cicd/github-actions/actions/dotnetcore/security-checks@master
+        uses: jstrullu/cicd-templates/github-actions/actions/dotnetcore/security-checks@master
         with:
           target-file: ${{ env.SECURITY_TARGET_FILE }}
           snyk-token: ${{ secrets.SNYK_TOKEN }}
@@ -67,7 +67,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Finalisation
-        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        uses: jstrullu/cicd-templates/github-actions/actions/finalisation@master
         with:
           release-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}
