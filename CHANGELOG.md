@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - updating actions versions to latest
 
 ### Documentation
+- mark PentestSaaS and QualiForma as on standby, not blocked
 - cover the full 14-project Azure DevOps portfolio, not just 8
 - add concrete per-project portfolio migration map
 
