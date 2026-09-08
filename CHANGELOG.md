@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - adding badges for CI status and released version
 
 ### Changed
+- CICD-11: add Astro stack (typecheck + build)
+- CICD-6: fix remaining jstrullu/cicd references in GitHub Actions files
+- CICD-7: switch .NET coverage from VSTest to coverlet XPlat
+- CICD-6: fix jstrullu/cicd references to jstrullu/cicd-templates
 - updating actions versions to latest
 
 
