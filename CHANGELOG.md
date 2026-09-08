@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - adding badges for CI status and released version
 
 ### Changed
+- CICD-9: Docker build/push CLI direct (insecure in-cluster registry)
 - CICD-8: optional git-sha versioning strategy alongside semver
 - CICD-11: add Astro stack (typecheck + build)
 - CICD-6: fix remaining jstrullu/cicd references in GitHub Actions files
