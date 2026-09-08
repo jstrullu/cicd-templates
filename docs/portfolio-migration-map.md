@@ -463,6 +463,108 @@ stages:
    `imageTag` parameter sets a single unprefixed tag on `image.tag`, not
    per-component prefixed tags — same limitation as PentestSaaS's #3 above.
 
+### ShopTemplate — deploy: `enableStagedDeploy` + `preDeployDockerBuilds` (CICD-17)
+
+`enableStagedDeploy` (CICD-13) assumed the same image, built once,
+promoted unchanged from sandbox to prod. ShopTemplate's frontend breaks
+that assumption: `VITE_API_URL` is baked in at build time, so it must be
+**rebuilt** with a different value for sandbox vs prod — not the design
+`helm_deploy.yml`/`helm_deploy_gated.yml` supported until now.
+
+**Fix**: `preDeployDockerBuilds` on both jobs — an optional list of images
+to build/push right before the Helm upgrade, each with its own full tag
+(no shared `imageTag` reuse). Wired into `dotnetcore_pipeline.yml` as
+`sandboxPreDeployDockerBuilds`/`prodPreDeployDockerBuilds` (both `helm`
+mode only, empty by default — every other consumer of `enableStagedDeploy`,
+i.e. paymenthub, is completely unaffected).
+
+The API image (unchanged across environments) is still built once in
+`Docker_Build_And_Publish` via the existing multi-image job (CICD-12) and
+promoted via `imageTag` — only the frontend needs `preDeployDockerBuilds`.
+
+```yaml
+trigger:
+  branches:
+    include: [main, master, feature/*, bugfix/*, hotfix/*, chore/*]
+pr:
+  branches:
+    include: [main, master]
+
+resources:
+  repositories:
+    - repository: templates
+      type: github
+      name: jstrullu/cicd-templates
+      endpoint: github-connection
+
+extends:
+  template: /azure-pipelines/pipelines/dotnetcore_pipeline.yml@templates
+  parameters:
+    appName: shoptemplate
+    gitFlowType: trunk-based
+    versioningStrategy: git-sha
+    projectFile: backend/ShopTemplate.slnx
+    dockerPushMode: insecure-cli
+    insecureRegistryUrl: registry.internal:5000
+    dockerRegistry: registry.internal:5000
+    # API image only — same SHA promoted sandbox -> prod, no rebuild needed.
+    dockerImages:
+      - name: api
+        dockerfile: Dockerfile
+        target: api
+    deployMode: helm
+    helmChartPath: helm/shoptemplate
+    enableStagedDeploy: true
+    sandboxNamespace: shoptemplate-sandbox
+    sandboxHelmValuesFile: helm/shoptemplate/values-sandbox.yaml
+    sandboxHelmSetValues: |
+      secrets.postgresPassword=$(SANDBOX_POSTGRES_PASSWORD)
+      secrets.paymentHubApiKey=$(SANDBOX_PAYMENTHUB_API_KEY)
+      secrets.paymentHubHmacSecret=$(SANDBOX_PAYMENTHUB_HMAC_SECRET)
+      frontend.image.tag=sandbox-$(BUILDID)
+    sandboxPreDeployDockerBuilds:
+      - name: shoptemplate-frontend
+        target: frontend
+        tag: sandbox-$(BUILDID)
+        alsoTag: sandbox-latest
+        buildArgs: |
+          BRAND=$(BRAND)
+          VITE_API_URL=$(SANDBOX_API_URL)
+    helmValuesFile: helm/shoptemplate/values-production.yaml
+    helmSetValues: |
+      secrets.postgresPassword=$(POSTGRES_PASSWORD)
+      secrets.paymentHubApiKey=$(PAYMENTHUB_API_KEY)
+      secrets.paymentHubHmacSecret=$(PAYMENTHUB_HMAC_SECRET)
+      frontend.image.tag=prod-$(BUILDID)
+    prodApprovalEnvironment: shoptemplate-prod
+    prodPreDeployDockerBuilds:
+      - name: shoptemplate-frontend
+        target: frontend
+        tag: prod-$(BUILDID)
+        alsoTag: prod-latest
+        buildArgs: |
+          BRAND=$(BRAND)
+          VITE_API_URL=$(PROD_API_URL)
+```
+
+One gap this does **not** close: the original's separate `Backend`/
+`Frontend` CI jobs (dotnet test + npm lint/test/build on every PR) — same
+"frontend CI has no template slot" limitation already flagged for
+Portfolio/PentestSaaS above. `BuildAndTest` in `dotnetcore_build_test.yml`
+only runs the .NET side; ShopTemplate's `npm run lint`/`npm test` would be
+dropped if migrated as shown. Not in scope for CICD-17 (tracked as the
+same open gap as Portfolio/PentestSaaS, no ticket yet — low urgency, easy
+to keep as a bespoke extra CI job outside the template if needed).
+
+**Real verification done**: `validate_templates.py` 50/50, parameter
+cross-check (job params match every pipeline call-site) done
+programmatically, the `docker build`/`docker push` command construction
+was extracted and run against a mock `docker()` with ShopTemplate's exact
+real values (frontend, `--target frontend`, two build-args, two tags) —
+output flags match the original pipeline's real `docker build` command
+1:1. **Not yet verified**: an actual pipeline run against ShopTemplate's
+real cluster/Helm chart.
+
 ---
 
 ## RestoTemplate (multi-client monorepo, CICD-20)
@@ -559,15 +661,16 @@ migration complete, per the two caveats above.
 | PentestSaaS | dotnetcore | ⚠️ same as Portfolio + pre-flight dependency check has no slot | **on standby (user decision 2026-09-08)** — frontend CI dropped; dependency pre-flight dropped; per-image tag needs manual `setValues` workaround |
 | QualiForma | dotnetcore | ❌ no | **on standby (user decision 2026-09-08)** — CICD-18: no Helm chart exists, Deploy stage not migratable without either writing one or a new job variant |
 | paymenthub | dotnetcore, staged | ✅ yes | none |
-| ShopTemplate | dotnetcore, staged | ❌ no, not as designed | frontend needs 2 different build-args per stage, contradicts `enableStagedDeploy`'s "same image promoted" assumption |
+| ShopTemplate | dotnetcore, staged | ✅ yes — CICD-17 delivered | frontend CI (npm lint/test) has no template slot, same as Portfolio/PentestSaaS above |
 
 **3 of 8 are ready to paste in today** (after the manual service connection
 step). **1 needs a documented gap accepted** (Portfolio). **2 are on
 standby by user decision, not blockers** (PentestSaaS, QualiForma — the
 technical analysis below still stands for whenever standby lifts).
-**1 is blocked** on real repo work (ShopTemplate needs a template feature
-this repo doesn't have yet, tracked as CICD-17). Agence de la Nive is
-covered separately above (not part of this multi-image group).
+**ShopTemplate is now migratable** (CICD-17 delivered `preDeployDockerBuilds`
+— same frontend-CI gap as Portfolio/PentestSaaS, but the deploy blocker is
+resolved). Agence de la Nive is covered separately above (not part of this
+multi-image group).
 
 ---
 

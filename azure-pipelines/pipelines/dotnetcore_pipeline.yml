@@ -136,6 +136,19 @@ parameters:
     displayName: Azure DevOps environment carrying the approval check for Prod (staged deploy — required when enableStagedDeploy is true)
     type: string
     default: ''
+  # For images that must be rebuilt per-stage instead of promoted unchanged
+  # (e.g. a frontend baking in a different API URL per environment) — see
+  # helm_deploy.yml's preDeployDockerBuilds for the full per-entry schema.
+  # Applies to deployMode: 'helm' only (mono Deploy stage and, when
+  # enableStagedDeploy is true, both Deploy_Sandbox and Deploy_Prod).
+  - name: sandboxPreDeployDockerBuilds
+    displayName: Images to rebuild/push right before the sandbox Helm upgrade (staged deploy, helm mode)
+    type: object
+    default: []
+  - name: prodPreDeployDockerBuilds
+    displayName: Images to rebuild/push right before the prod Helm upgrade, after approval (staged deploy, helm mode)
+    type: object
+    default: []
   - name: enableMutationTesting
     displayName: Enable mutation testing
     type: boolean
@@ -248,6 +261,9 @@ stages:
               valuesFile: ${{ parameters.helmValuesFile }}
               imageTag: $(BUILDID)
               setValues: ${{ parameters.helmSetValues }}
+              registry: ${{ parameters.dockerRegistry }}
+              insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+              preDeployDockerBuilds: ${{ parameters.sandboxPreDeployDockerBuilds }}
 
   - ${{ if and(eq(parameters.enableStagedDeploy, true), eq(parameters.deployMode, 'helm')) }}:
     - stage: Deploy_Sandbox
@@ -268,6 +284,9 @@ stages:
             valuesFile: ${{ coalesce(parameters.sandboxHelmValuesFile, parameters.helmValuesFile) }}
             imageTag: $(BUILDID)
             setValues: ${{ coalesce(parameters.sandboxHelmSetValues, parameters.helmSetValues) }}
+            registry: ${{ parameters.dockerRegistry }}
+            insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+            preDeployDockerBuilds: ${{ parameters.sandboxPreDeployDockerBuilds }}
 
     - stage: Deploy_Prod
       displayName: 'Deploy Production'
@@ -289,6 +308,9 @@ stages:
             imageTag: $(BUILDID)
             setValues: ${{ parameters.helmSetValues }}
             approvalEnvironment: ${{ parameters.prodApprovalEnvironment }}
+            registry: ${{ parameters.dockerRegistry }}
+            insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+            preDeployDockerBuilds: ${{ parameters.prodPreDeployDockerBuilds }}
 
   - stage: Finalization
     displayName: 'Finalization'

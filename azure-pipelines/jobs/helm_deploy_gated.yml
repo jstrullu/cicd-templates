@@ -28,6 +28,22 @@ parameters:
   - name: approvalEnvironment
     displayName: Azure DevOps environment name that carries the approval check (Pipelines > Environments > <name> > Approvals and checks)
     type: string
+  - name: registry
+    displayName: Registry host (preDeployDockerBuilds mode, e.g. registry.internal:5000)
+    type: string
+    default: ''
+  - name: insecureRegistryUrl
+    displayName: Configure this registry as insecure on the agent (preDeployDockerBuilds mode, leave empty if already configured)
+    type: string
+    default: ''
+  # Same schema as helm_deploy.yml's preDeployDockerBuilds — for images that
+  # must be rebuilt with stage-specific build-args instead of promoted
+  # unchanged (e.g. ShopTemplate's frontend, rebuilt with the prod
+  # VITE_API_URL right before the gated prod deploy).
+  - name: preDeployDockerBuilds
+    displayName: Images to build/push right before the Helm upgrade, after approval (leave empty to skip)
+    type: object
+    default: []
 
 # Gated variant of helm_deploy.yml — identical recover/upgrade/verify/diagnose
 # sequence, but as a `deployment:` job bound to an Azure DevOps environment,
@@ -46,6 +62,62 @@ jobs:
           steps:
             - checkout: self
               clean: true
+
+            - ${{ if ne(length(parameters.preDeployDockerBuilds), 0) }}:
+              - ${{ if ne(parameters.insecureRegistryUrl, '') }}:
+                - script: |
+                    set -e
+                    DAEMON_JSON="/etc/docker/daemon.json"
+                    TARGET="${{ parameters.insecureRegistryUrl }}"
+                    if [ -f "$DAEMON_JSON" ] && grep -q "$TARGET" "$DAEMON_JSON" 2>/dev/null; then
+                      echo "Registry $TARGET already configured as insecure — skipping daemon restart."
+                    else
+                      echo "{ \"insecure-registries\" : [\"$TARGET\"] }" | sudo tee "$DAEMON_JSON"
+                      sudo service docker restart
+                    fi
+                  displayName: 'Ensure insecure registry configured (idempotent)'
+
+              - ${{ each image in parameters.preDeployDockerBuilds }}:
+                - script: |
+                    set -e
+                    IMAGE="${{ parameters.registry }}/${{ image.name }}"
+                    TAG="${{ image.tag }}"
+
+                    TAG_FLAGS=(-t "$IMAGE:$TAG")
+                    ALSO_TAG="${{ coalesce(image.alsoTag, '') }}"
+                    if [ -n "$ALSO_TAG" ]; then
+                      TAG_FLAGS+=(-t "$IMAGE:$ALSO_TAG")
+                    fi
+
+                    BUILD_ARGS_FLAGS=()
+                    while IFS= read -r line; do
+                      [ -z "$line" ] && continue
+                      BUILD_ARGS_FLAGS+=(--build-arg "$line")
+                    done <<< "${{ coalesce(image.buildArgs, '') }}"
+
+                    TARGET_FLAG=()
+                    TARGET_VALUE="${{ coalesce(image.target, '') }}"
+                    if [ -n "$TARGET_VALUE" ]; then
+                      TARGET_FLAG=(--target "$TARGET_VALUE")
+                    fi
+
+                    docker build \
+                      "${TAG_FLAGS[@]}" \
+                      -f "${{ coalesce(image.dockerfile, 'Dockerfile') }}" \
+                      "${TARGET_FLAG[@]}" \
+                      "${BUILD_ARGS_FLAGS[@]}" \
+                      "${{ coalesce(image.context, '.') }}"
+                  displayName: 'docker build — ${{ image.name }} (${{ image.tag }})'
+                - script: |
+                    set -e
+                    IMAGE="${{ parameters.registry }}/${{ image.name }}"
+                    TAG="${{ image.tag }}"
+                    docker push "$IMAGE:$TAG"
+                    ALSO_TAG="${{ coalesce(image.alsoTag, '') }}"
+                    if [ -n "$ALSO_TAG" ]; then
+                      docker push "$IMAGE:$ALSO_TAG"
+                    fi
+                  displayName: 'docker push — ${{ image.name }} (${{ image.tag }})'
 
             - script: |
                 NS="${{ parameters.namespace }}"

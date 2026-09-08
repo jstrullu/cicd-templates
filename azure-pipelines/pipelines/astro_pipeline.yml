@@ -235,6 +235,8 @@ stages:
             valuesFile: ${{ parameters.helmValuesFile }}
             imageTag: $(BUILDID)
             setValues: ${{ parameters.helmSetValues }}
+            registry: ${{ parameters.dockerRegistry }}
+            insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
 
   - stage: Finalization
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))

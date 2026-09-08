@@ -25,6 +25,40 @@ parameters:
   - name: timeout
     type: string
     default: '5m'
+  - name: registry
+    displayName: Registry host (preDeployDockerBuilds mode, e.g. registry.internal:5000)
+    type: string
+    default: ''
+  - name: insecureRegistryUrl
+    displayName: Configure this registry as insecure on the agent (preDeployDockerBuilds mode, leave empty if already configured)
+    type: string
+    default: ''
+  # For images that must be rebuilt with stage-specific build-args instead of
+  # promoted unchanged (e.g. a frontend baking in a different API URL per
+  # environment) — matches ShopTemplate's real pattern: the frontend image
+  # is rebuilt inline in the deploy job itself, not reused from an earlier
+  # stage. One entry per image:
+  #   name       (required) — image name, final image = registry/name
+  #   dockerfile (optional, default 'Dockerfile')
+  #   context    (optional, default '.')
+  #   target     (optional) — multi-stage build target
+  #   tag        (required) — full tag to build/push (e.g. 'sandbox-$(BUILDID)')
+  #   alsoTag    (optional) — extra tag to also push (e.g. 'sandbox-latest')
+  #   buildArgs  (optional) — newline-separated KEY=VALUE
+  #
+  # Example (matches ShopTemplate's frontend, sandbox stage):
+  #   preDeployDockerBuilds:
+  #     - name: shoptemplate-frontend
+  #       target: frontend
+  #       tag: sandbox-$(BUILDID)
+  #       alsoTag: sandbox-latest
+  #       buildArgs: |
+  #         BRAND=$(BRAND)
+  #         VITE_API_URL=$(SANDBOX_API_URL)
+  - name: preDeployDockerBuilds
+    displayName: Images to build/push right before the Helm upgrade (leave empty to skip — most consumers don't need this)
+    type: object
+    default: []
 
 # Helm CLI direct — for a self-hosted agent that already runs inside the
 # target k3s cluster (kubectl/helm have cluster access with no kubeconfig
@@ -40,6 +74,62 @@ jobs:
     steps:
       - checkout: self
         clean: true
+
+      - ${{ if ne(length(parameters.preDeployDockerBuilds), 0) }}:
+        - ${{ if ne(parameters.insecureRegistryUrl, '') }}:
+          - script: |
+              set -e
+              DAEMON_JSON="/etc/docker/daemon.json"
+              TARGET="${{ parameters.insecureRegistryUrl }}"
+              if [ -f "$DAEMON_JSON" ] && grep -q "$TARGET" "$DAEMON_JSON" 2>/dev/null; then
+                echo "Registry $TARGET already configured as insecure — skipping daemon restart."
+              else
+                echo "{ \"insecure-registries\" : [\"$TARGET\"] }" | sudo tee "$DAEMON_JSON"
+                sudo service docker restart
+              fi
+            displayName: 'Ensure insecure registry configured (idempotent)'
+
+        - ${{ each image in parameters.preDeployDockerBuilds }}:
+          - script: |
+              set -e
+              IMAGE="${{ parameters.registry }}/${{ image.name }}"
+              TAG="${{ image.tag }}"
+
+              TAG_FLAGS=(-t "$IMAGE:$TAG")
+              ALSO_TAG="${{ coalesce(image.alsoTag, '') }}"
+              if [ -n "$ALSO_TAG" ]; then
+                TAG_FLAGS+=(-t "$IMAGE:$ALSO_TAG")
+              fi
+
+              BUILD_ARGS_FLAGS=()
+              while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                BUILD_ARGS_FLAGS+=(--build-arg "$line")
+              done <<< "${{ coalesce(image.buildArgs, '') }}"
+
+              TARGET_FLAG=()
+              TARGET_VALUE="${{ coalesce(image.target, '') }}"
+              if [ -n "$TARGET_VALUE" ]; then
+                TARGET_FLAG=(--target "$TARGET_VALUE")
+              fi
+
+              docker build \
+                "${TAG_FLAGS[@]}" \
+                -f "${{ coalesce(image.dockerfile, 'Dockerfile') }}" \
+                "${TARGET_FLAG[@]}" \
+                "${BUILD_ARGS_FLAGS[@]}" \
+                "${{ coalesce(image.context, '.') }}"
+            displayName: 'docker build — ${{ image.name }} (${{ image.tag }})'
+          - script: |
+              set -e
+              IMAGE="${{ parameters.registry }}/${{ image.name }}"
+              TAG="${{ image.tag }}"
+              docker push "$IMAGE:$TAG"
+              ALSO_TAG="${{ coalesce(image.alsoTag, '') }}"
+              if [ -n "$ALSO_TAG" ]; then
+                docker push "$IMAGE:$ALSO_TAG"
+              fi
+            displayName: 'docker push — ${{ image.name }} (${{ image.tag }})'
 
       - script: |
           NS="${{ parameters.namespace }}"
