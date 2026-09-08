@@ -119,6 +119,27 @@ switch to `helm`:
         secrets.apiKey=$(API_KEY)
 ```
 
+**Staged Sandbox → Prod deploy** (helm mode only). Deploys to a sandbox
+namespace automatically, then pauses for manual approval before deploying
+the same image tag to production. Configure the approval check on
+`prodApprovalEnvironment` in **Pipelines → Environments → &lt;name&gt; →
+Approvals and checks** — the pipeline has no opinion on who approves.
+
+```yaml
+    parameters:
+      deployMode: 'helm'
+      enableStagedDeploy: true
+      helmChartPath: 'helm/my-app'
+      helmValuesFile: 'helm/my-app/values-production.yaml'   # used for Prod
+      helmSetValues: |
+        secrets.postgresPassword=$(POSTGRES_PASSWORD)
+      sandboxHelmValuesFile: 'helm/my-app/values-sandbox.yaml'  # defaults to helmValuesFile if omitted
+      sandboxHelmSetValues: |
+        secrets.postgresPassword=$(SANDBOX_POSTGRES_PASSWORD)
+      # sandboxNamespace: 'my-app-staging'   # defaults to '{appName}-sandbox'
+      prodApprovalEnvironment: 'my-app-prod'   # required
+```
+
 ### Java/Gradle
 
 ```yaml

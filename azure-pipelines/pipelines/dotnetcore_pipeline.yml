@@ -107,6 +107,31 @@ parameters:
     displayName: Extra --set-string KEY=VALUE pairs, one per line (helm mode)
     type: string
     default: ''
+  # Sandbox -> Prod, same image tag reused between the two, gated by manual
+  # approval on prodApprovalEnvironment. Scoped to deployMode: 'helm' only —
+  # both real consumers of this pattern in the org's portfolio (paymenthub,
+  # ShopTemplate) use Helm. Ignored (falls back to the single Deploy stage
+  # above) when deployMode is 'kube-manifest'.
+  - name: enableStagedDeploy
+    displayName: Enable Sandbox -> Prod staged deploy with manual approval (helm mode only)
+    type: boolean
+    default: false
+  - name: sandboxNamespace
+    displayName: Namespace/release for the sandbox stage (staged deploy, defaults to {appName}-sandbox)
+    type: string
+    default: ''
+  - name: sandboxHelmValuesFile
+    displayName: Values file for the sandbox stage (staged deploy, defaults to helmValuesFile)
+    type: string
+    default: ''
+  - name: sandboxHelmSetValues
+    displayName: --set-string pairs for the sandbox stage (staged deploy, defaults to helmSetValues)
+    type: string
+    default: ''
+  - name: prodApprovalEnvironment
+    displayName: Azure DevOps environment carrying the approval check for Prod (staged deploy — required when enableStagedDeploy is true)
+    type: string
+    default: ''
   - name: enableMutationTesting
     displayName: Enable mutation testing
     type: boolean
@@ -192,24 +217,65 @@ stages:
             insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
             dockerImages: ${{ parameters.dockerImages }}
 
-  - stage: Deploy
-    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
-    dependsOn:
-      - Initialization
-      - BuildAndTest
-      - Docker_Build_And_Publish
-    variables:
-      BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-      deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
-    jobs:
-      - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
-        - template: /jobs/kube_deploy.yml
-          parameters:
-            env: $(deployEnv)
-            resource: ${{ parameters.appName }}
-            namespace: ${{ parameters.appName }}
-      - ${{ if eq(parameters.deployMode, 'helm') }}:
+  - ${{ if or(eq(parameters.enableStagedDeploy, false), ne(parameters.deployMode, 'helm')) }}:
+    - stage: Deploy
+      condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+      dependsOn:
+        - Initialization
+        - BuildAndTest
+        - Docker_Build_And_Publish
+      variables:
+        BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+        deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+      jobs:
+        - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
+          - template: /jobs/kube_deploy.yml
+            parameters:
+              env: $(deployEnv)
+              resource: ${{ parameters.appName }}
+              namespace: ${{ parameters.appName }}
+        - ${{ if eq(parameters.deployMode, 'helm') }}:
+          - template: /jobs/helm_deploy.yml
+            parameters:
+              releaseName: ${{ parameters.appName }}
+              namespace: ${{ parameters.appName }}
+              chartPath: ${{ parameters.helmChartPath }}
+              valuesFile: ${{ parameters.helmValuesFile }}
+              imageTag: $(BUILDID)
+              setValues: ${{ parameters.helmSetValues }}
+
+  - ${{ if and(eq(parameters.enableStagedDeploy, true), eq(parameters.deployMode, 'helm')) }}:
+    - stage: Deploy_Sandbox
+      displayName: 'Deploy Sandbox'
+      condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+      dependsOn:
+        - Initialization
+        - BuildAndTest
+        - Docker_Build_And_Publish
+      variables:
+        BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      jobs:
         - template: /jobs/helm_deploy.yml
+          parameters:
+            releaseName: ${{ coalesce(parameters.sandboxNamespace, format('{0}-sandbox', parameters.appName)) }}
+            namespace: ${{ coalesce(parameters.sandboxNamespace, format('{0}-sandbox', parameters.appName)) }}
+            chartPath: ${{ parameters.helmChartPath }}
+            valuesFile: ${{ coalesce(parameters.sandboxHelmValuesFile, parameters.helmValuesFile) }}
+            imageTag: $(BUILDID)
+            setValues: ${{ coalesce(parameters.sandboxHelmSetValues, parameters.helmSetValues) }}
+
+    - stage: Deploy_Prod
+      displayName: 'Deploy Production'
+      condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+      dependsOn:
+        - Initialization
+        - BuildAndTest
+        - Docker_Build_And_Publish
+        - Deploy_Sandbox
+      variables:
+        BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      jobs:
+        - template: /jobs/helm_deploy_gated.yml
           parameters:
             releaseName: ${{ parameters.appName }}
             namespace: ${{ parameters.appName }}
@@ -217,6 +283,7 @@ stages:
             valuesFile: ${{ parameters.helmValuesFile }}
             imageTag: $(BUILDID)
             setValues: ${{ parameters.helmSetValues }}
+            approvalEnvironment: ${{ parameters.prodApprovalEnvironment }}
 
   - stage: Finalization
     displayName: 'Finalization'
@@ -225,7 +292,10 @@ stages:
       - Initialization
       - BuildAndTest
       - Docker_Build_And_Publish
-      - Deploy
+      - ${{ if or(eq(parameters.enableStagedDeploy, false), ne(parameters.deployMode, 'helm')) }}:
+        - Deploy
+      - ${{ if and(eq(parameters.enableStagedDeploy, true), eq(parameters.deployMode, 'helm')) }}:
+        - Deploy_Prod
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
       shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]

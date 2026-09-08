@@ -1,0 +1,118 @@
+parameters:
+  - name: releaseName
+    type: string
+  - name: namespace
+    type: string
+  - name: chartPath
+    displayName: Path to the Helm chart, relative to repo root
+    type: string
+  - name: valuesFile
+    displayName: Path to the values file to apply, relative to repo root
+    type: string
+    default: ''
+  - name: imageTag
+    displayName: Image tag to set via --set image.tag (leave empty to skip)
+    type: string
+    default: ''
+  - name: setValues
+    displayName: Extra --set-string KEY=VALUE pairs, one per line (e.g. secrets.postgresPassword=$(POSTGRES_PASSWORD))
+    type: string
+    default: ''
+  - name: deploymentName
+    displayName: Deployment name to wait on for rollout status (defaults to releaseName)
+    type: string
+    default: ''
+  - name: timeout
+    type: string
+    default: '5m'
+  - name: approvalEnvironment
+    displayName: Azure DevOps environment name that carries the approval check (Pipelines > Environments > <name> > Approvals and checks)
+    type: string
+
+# Gated variant of helm_deploy.yml — identical recover/upgrade/verify/diagnose
+# sequence, but as a `deployment:` job bound to an Azure DevOps environment,
+# so it pauses for manual approval before running. Configure the approval
+# check on that environment (see paymenthub-prod / shoptemplate-prod for the
+# real pattern this mirrors) — the pipeline itself has no opinion on who can
+# approve, that's entirely an environment-level setting.
+jobs:
+  - deployment: helm_deploy_gated
+    displayName: 'Helm deploy to ${{ parameters.namespace }} (awaits approval)'
+    timeoutInMinutes: 20
+    environment: ${{ parameters.approvalEnvironment }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: self
+              clean: true
+
+            - script: |
+                NS="${{ parameters.namespace }}"
+                RELEASE="${{ parameters.releaseName }}"
+                echo "=== Current Helm history ==="
+                helm history "$RELEASE" -n "$NS" --max 10 2>/dev/null || echo "(no release)"
+                PENDING_REVS=$(helm history "$RELEASE" -n "$NS" --max 20 2>/dev/null | grep 'pending-' | awk '{print $1}')
+                for REV in $PENDING_REVS; do
+                  SECRET_NAME="sh.helm.release.v1.$RELEASE.v${REV}"
+                  echo "Deleting stuck revision $REV -> secret/$SECRET_NAME"
+                  kubectl delete secret "$SECRET_NAME" -n "$NS" --ignore-not-found
+                  kubectl delete configmap "$SECRET_NAME" -n "$NS" --ignore-not-found
+                done
+                echo "=== Helm history after cleanup ==="
+                helm history "$RELEASE" -n "$NS" --max 10 2>/dev/null || echo "(no release)"
+              displayName: 'Recover failed Helm release (if any)'
+
+            - script: |
+                set -euo pipefail
+                NS="${{ parameters.namespace }}"
+                RELEASE="${{ parameters.releaseName }}"
+                CHART="${{ parameters.chartPath }}"
+
+                ARGS=(upgrade --install "$RELEASE" "$CHART" --namespace "$NS" --create-namespace)
+
+                VALUES_FILE="${{ parameters.valuesFile }}"
+                if [ -n "$VALUES_FILE" ]; then
+                  ARGS+=(-f "$VALUES_FILE")
+                fi
+
+                IMAGE_TAG="${{ parameters.imageTag }}"
+                if [ -n "$IMAGE_TAG" ]; then
+                  ARGS+=(--set "image.tag=$IMAGE_TAG")
+                fi
+
+                while IFS= read -r line; do
+                  [ -z "$line" ] && continue
+                  ARGS+=(--set-string "$line")
+                done <<< "${{ parameters.setValues }}"
+
+                ARGS+=(--atomic --timeout "${{ parameters.timeout }}")
+
+                echo "Running: helm ${ARGS[*]}"
+                helm "${ARGS[@]}"
+              displayName: 'helm upgrade --install'
+
+            - script: |
+                DEPLOYMENT="${{ parameters.deploymentName }}"
+                if [ -z "$DEPLOYMENT" ]; then
+                  DEPLOYMENT="${{ parameters.releaseName }}"
+                fi
+                kubectl rollout status "deployment/$DEPLOYMENT" -n "${{ parameters.namespace }}" --timeout="${{ parameters.timeout }}"
+              displayName: 'Verify rollout status'
+
+            - script: kubectl get pods -n ${{ parameters.namespace }} -o wide
+              displayName: 'Show pod status'
+
+            - script: |
+                NS="${{ parameters.namespace }}"
+                RELEASE="${{ parameters.releaseName }}"
+                echo "=== Pod status ==="
+                kubectl get pods -n "$NS" -o wide
+                echo ""
+                echo "=== Recent events (last 30) ==="
+                kubectl get events -n "$NS" --sort-by='.lastTimestamp' 2>/dev/null | tail -30
+                echo ""
+                echo "=== Helm history ==="
+                helm history "$RELEASE" -n "$NS" --max 5 2>/dev/null || echo "(no release)"
+              condition: failed()
+              displayName: 'Diagnose deployment failure'
