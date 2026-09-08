@@ -1,0 +1,245 @@
+parameters:
+  - name: csprojPath
+    displayName: Path to the MAUI Android project (.csproj)
+    type: string
+  - name: dotnetSdkVersion
+    type: string
+    default: '10.0.302'
+  - name: useGlobalJson
+    type: boolean
+    default: false
+  - name: globalJsonWorkingDirectory
+    type: string
+    default: ''
+  - name: jdkHome
+    type: string
+  - name: jdkVersion
+    type: string
+    default: '17.0.13'
+  - name: androidSdkHome
+    type: string
+  - name: androidPlatform
+    type: string
+    default: 'android-36'
+  - name: androidBuildTools
+    type: string
+    default: '36.0.0'
+  - name: keystoreSecureFile
+    displayName: 'Secure File name holding the release keystore (Pipelines > Library > Secure files)'
+    type: string
+  - name: keystoreAliasVar
+    displayName: 'Pipeline variable name holding the keystore alias (from a variable group)'
+    type: string
+    default: 'ANDROID_KEYSTORE_ALIAS'
+  - name: keystoreStorePassVar
+    type: string
+    default: 'ANDROID_KEYSTORE_STOREPASS'
+  - name: keystoreKeyPassVar
+    type: string
+    default: 'ANDROID_KEYSTORE_KEYPASS'
+  - name: packageFormat
+    displayName: Output format
+    type: string
+    default: apk
+    values:
+      - apk
+      - aab
+  - name: applicationId
+    displayName: 'Android application ID (package name), e.g. com.siso.belote — used to name the published artifact predictably'
+    type: string
+  - name: versionCodeExpression
+    displayName: 'Shell expression producing the Android versionCode (defaults to a monotone counter from Build.BuildId)'
+    type: string
+    default: '$((1 + $(Build.BuildId)))'
+  - name: displayVersionExpression
+    displayName: 'Shell expression producing ApplicationDisplayVersion (empty = let the project default apply). Example for a release/vX.Y.Z tag: ${SB#refs/tags/release/v} after SB=$(Build.SourceBranch)'
+    type: string
+    default: ''
+  - name: extraMsBuildArgs
+    displayName: 'Extra -p:Key=Value MSBuild args, one per line'
+    type: string
+    default: ''
+  # Play Store publish (packageFormat: aab only). Matches Belote/sc-app's
+  # real structure: build + upload happen in the SAME job, because the AAB
+  # never leaves the agent's local disk — no cross-job artifact hop needed.
+  # Leave publishToPlayStore false to just produce a signed AAB (or APK)
+  # artifact with no upload (e.g. a CI verification build).
+  - name: publishToPlayStore
+    displayName: Upload the signed AAB to the Play Store after building it (packageFormat must be aab)
+    type: boolean
+    default: false
+  - name: playPublisherKeySecureFile
+    displayName: 'Secure File name holding the Google Play service-account JSON key (publishToPlayStore mode)'
+    type: string
+    default: ''
+  - name: fastlaneDockerfilePath
+    displayName: 'Path to the local fastlane image Dockerfile, relative to repo root (built locally, never pushed to a registry)'
+    type: string
+    default: 'tools/fastlane'
+  - name: fastlaneImageTag
+    displayName: Local tag for the built fastlane image
+    type: string
+    default: 'fastlane-supply:1'
+  - name: playStoreTrack
+    displayName: Play Store track to upload to (publishToPlayStore mode)
+    type: string
+    default: internal
+    values:
+      - internal
+      - alpha
+      - beta
+      - production
+  - name: playStoreReleaseStatus
+    displayName: Release status on the target track (publishToPlayStore mode)
+    type: string
+    default: completed
+    values:
+      - completed
+      - draft
+      - inProgress
+      - halted
+
+# Signed Release build (APK for sideload, or AAB for Play Store), with an
+# optional Play Store upload appended in the SAME job when publishToPlayStore
+# is true. Matches Belote's APK/PlayStore stages and sc-app's Mobile/
+# MobileRelease jobs: DownloadSecureFile@1 for the keystore, versionCode/
+# displayVersion computed by the caller (branch push vs release tag have
+# different conventions), single-worker MSBuild to avoid OOM on a shared
+# self-hosted agent, and — when publishing — a locally-built fastlane image
+# (never pushed to a registry) uploading a BINARY ONLY (all
+# --skip_upload_metadata/images/screenshots/changelogs hardcoded true, this
+# job must never touch the store listing from CI).
+#
+# NOT verified end-to-end: no test Play Store app is available to safely
+# validate a real fastlane supply run. Verification for CICD-19 stopped at
+# "produces a correctly signed AAB" — the publish steps mirror two real
+# working pipelines (Belote, sc-app) exactly but the upload itself is
+# unproven by this repo. Test against a real project's own track before
+# trusting it against a production listing.
+jobs:
+  - job: android_release_build
+    displayName: 'Android signed ${{ upper(parameters.packageFormat) }} build'
+    timeoutInMinutes: 45
+    steps:
+      - checkout: self
+        fetchDepth: 1
+
+      - ${{ if eq(parameters.useGlobalJson, true) }}:
+        - task: UseDotNet@2
+          displayName: 'Install .NET SDK from global.json'
+          inputs:
+            packageType: sdk
+            useGlobalJson: true
+            workingDirectory: ${{ parameters.globalJsonWorkingDirectory }}
+      - ${{ if eq(parameters.useGlobalJson, false) }}:
+        - task: UseDotNet@2
+          displayName: 'Install .NET ${{ parameters.dotnetSdkVersion }} SDK'
+          inputs:
+            packageType: sdk
+            version: '${{ parameters.dotnetSdkVersion }}'
+
+      - template: /steps/android_bootstrap.yml
+        parameters:
+          jdkHome: ${{ parameters.jdkHome }}
+          jdkVersion: ${{ parameters.jdkVersion }}
+          androidSdkHome: ${{ parameters.androidSdkHome }}
+          androidPlatform: ${{ parameters.androidPlatform }}
+          androidBuildTools: ${{ parameters.androidBuildTools }}
+
+      - task: DownloadSecureFile@1
+        name: keystore
+        displayName: 'Download release keystore'
+        inputs:
+          secureFile: '${{ parameters.keystoreSecureFile }}'
+
+      - script: dotnet workload restore ${{ parameters.csprojPath }}
+        displayName: 'Restore maui-android workload'
+
+      - ${{ if eq(parameters.displayVersionExpression, '') }}:
+        - script: |
+            VERSION_CODE=${{ parameters.versionCodeExpression }}
+            echo "##vso[task.setvariable variable=APP_VERSION_CODE]$VERSION_CODE"
+            echo "Android versionCode = $VERSION_CODE"
+          displayName: 'Compute versionCode'
+      - ${{ if ne(parameters.displayVersionExpression, '') }}:
+        - script: |
+            VERSION_CODE=${{ parameters.versionCodeExpression }}
+            echo "##vso[task.setvariable variable=APP_VERSION_CODE]$VERSION_CODE"
+            DISPLAY_VERSION=${{ parameters.displayVersionExpression }}
+            echo "##vso[task.setvariable variable=APP_DISPLAY_VERSION]$DISPLAY_VERSION"
+            echo "versionCode=$VERSION_CODE displayVersion=$DISPLAY_VERSION"
+          displayName: 'Compute versionCode + displayVersion'
+
+      - script: |
+          EXTRA_ARGS=""
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            EXTRA_ARGS="$EXTRA_ARGS -p:$line"
+          done <<< "${{ parameters.extraMsBuildArgs }}"
+
+          DISPLAY_VERSION_ARG=""
+          if [ -n "${APP_DISPLAY_VERSION:-}" ]; then
+            DISPLAY_VERSION_ARG="-p:ApplicationDisplayVersion=$APP_DISPLAY_VERSION"
+          fi
+
+          dotnet publish ${{ parameters.csprojPath }} \
+            -c Release -f net10.0-android \
+            -p:AndroidPackageFormat=${{ parameters.packageFormat }} \
+            -p:ApplicationVersion=$(APP_VERSION_CODE) \
+            $DISPLAY_VERSION_ARG \
+            -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore=$(keystore.secureFilePath) \
+            -p:AndroidSigningStorePass=$(${{ parameters.keystoreStorePassVar }}) \
+            -p:AndroidSigningKeyAlias=$(${{ parameters.keystoreAliasVar }}) \
+            -p:AndroidSigningKeyPass=$(${{ parameters.keystoreKeyPassVar }}) \
+            -p:AndroidSdkDirectory=$ANDROID_SDK_ROOT \
+            -p:JavaSdkDirectory=$JAVA_HOME \
+            -p:UseSharedCompilation=false \
+            $EXTRA_ARGS \
+            -m:1 \
+            -o $(Build.ArtifactStagingDirectory)/${{ parameters.packageFormat }}
+        displayName: 'Publish signed ${{ upper(parameters.packageFormat) }} (Release)'
+
+      - script: dotnet build-server shutdown
+        displayName: 'Shutdown build servers'
+        condition: always()
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Publish ${{ upper(parameters.packageFormat) }} artifact'
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)/${{ parameters.packageFormat }}/${{ parameters.applicationId }}-Signed.${{ parameters.packageFormat }}'
+          artifact: '${{ parameters.applicationId }}-android-${{ parameters.packageFormat }}-vc$(APP_VERSION_CODE)'
+          publishLocation: 'pipeline'
+
+      - ${{ if eq(parameters.publishToPlayStore, true) }}:
+        - task: DownloadSecureFile@1
+          name: playPublisherKey
+          displayName: 'Download Play publisher JSON key'
+          inputs:
+            secureFile: '${{ parameters.playPublisherKeySecureFile }}'
+
+        - script: docker build -t ${{ parameters.fastlaneImageTag }} ${{ parameters.fastlaneDockerfilePath }}
+          displayName: 'Build local fastlane image (cached layers)'
+
+        # Binary-only upload: every --skip_upload_* for store-listing
+        # content is hardcoded true — this must never touch the store
+        # listing (metadata/images/screenshots/changelogs) from CI.
+        - script: |
+            set -e
+            docker run --rm \
+              -v "$(Build.ArtifactStagingDirectory)/${{ parameters.packageFormat }}:/aab:ro" \
+              -v "$(playPublisherKey.secureFilePath):/tmp/key.json:ro" \
+              -w /aab \
+              ${{ parameters.fastlaneImageTag }} \
+              supply \
+                --package_name ${{ parameters.applicationId }} \
+                --aab ${{ parameters.applicationId }}-Signed.${{ parameters.packageFormat }} \
+                --skip_upload_apk true \
+                --track ${{ parameters.playStoreTrack }} \
+                --release_status ${{ parameters.playStoreReleaseStatus }} \
+                --skip_upload_metadata true \
+                --skip_upload_images true \
+                --skip_upload_screenshots true \
+                --skip_upload_changelogs true \
+                --json_key /tmp/key.json
+          displayName: 'Upload AAB to Play Store (${{ parameters.playStoreTrack }})'

@@ -1,0 +1,229 @@
+trigger:
+  branches:
+    include:
+      - master
+  tags:
+    include:
+      - release/v*
+
+pr: none
+
+parameters:
+  - name: appName
+    displayName: Application name (used to namespace the JDK/Android SDK agent cache)
+    type: string
+    default: $(Build.Repository.Name)
+  - name: applicationId
+    displayName: Android application ID (package name), e.g. com.siso.belote
+    type: string
+  - name: csprojPath
+    displayName: Path to the MAUI Android project (.csproj)
+    type: string
+  - name: testProjectPath
+    displayName: Path to the .csproj/.slnx to run `dotnet test` against before any build (empty to skip the Tests stage entirely)
+    type: string
+    default: ''
+  - name: dotnetSdkVersion
+    displayName: .NET SDK version (UseDotNet@2). Ignored when useGlobalJson is true.
+    type: string
+    default: '10.0.302'
+  - name: useGlobalJson
+    displayName: Resolve the MAUI project's SDK version from its own global.json instead of dotnetSdkVersion (e.g. a mobile project pinned to an older SDK than the repo root)
+    type: boolean
+    default: false
+  - name: globalJsonWorkingDirectory
+    displayName: Directory containing the local global.json (useGlobalJson mode only)
+    type: string
+    default: ''
+  - name: jdkVersion
+    type: string
+    default: '17.0.13'
+  - name: androidPlatform
+    type: string
+    default: 'android-36'
+  - name: androidBuildTools
+    type: string
+    default: '36.0.0'
+  - name: keystoreSecureFile
+    displayName: 'Secure File name holding the release keystore (Pipelines > Library > Secure files)'
+    type: string
+  - name: keystoreAliasVar
+    type: string
+    default: 'ANDROID_KEYSTORE_ALIAS'
+  - name: keystoreStorePassVar
+    type: string
+    default: 'ANDROID_KEYSTORE_STOREPASS'
+  - name: keystoreKeyPassVar
+    type: string
+    default: 'ANDROID_KEYSTORE_KEYPASS'
+  - name: signingVariableGroup
+    displayName: Variable group holding the keystore alias/passwords (linked into the APK/PlayStore stages)
+    type: string
+  - name: extraMsBuildArgs
+    displayName: 'Extra -p:Key=Value MSBuild args for both APK and AAB builds, one per line'
+    type: string
+    default: ''
+  # APK stage — unsigned-sideload-equivalent but actually signed (matches
+  # Belote: every push to the trigger branch produces a signed APK artifact
+  # for manual sideload/test, no store involved).
+  - name: enableApkStage
+    displayName: Build a signed APK artifact on every push to the trigger branch
+    type: boolean
+    default: true
+  - name: apkVersionCodeExpression
+    displayName: Shell expression producing the APK's Android versionCode
+    type: string
+    default: '$((1 + $(Build.BuildId)))'
+  # PlayStore stage — signed AAB, optionally uploaded, gated on a release tag.
+  - name: releaseTagPattern
+    displayName: Git tag prefix that triggers the PlayStore stage (must also be added to this file's trigger.tags.include)
+    type: string
+    default: 'refs/tags/release/v'
+  - name: aabVersionCodeExpression
+    type: string
+    default: '$((1 + $(Build.BuildId)))'
+  - name: aabDisplayVersionExpression
+    displayName: 'Shell expression producing ApplicationDisplayVersion from the release tag (empty = no display version set on the AAB). Example: SB="$(Build.SourceBranch)"; echo "${SB#refs/tags/release/v}"'
+    type: string
+    default: ''
+  - name: publishToPlayStore
+    displayName: Upload the signed AAB to the Play Store after building it
+    type: boolean
+    default: false
+  - name: playPublisherKeySecureFile
+    displayName: 'Secure File name holding the Google Play service-account JSON key (publishToPlayStore mode)'
+    type: string
+    default: ''
+  - name: fastlaneDockerfilePath
+    type: string
+    default: 'tools/fastlane'
+  - name: playStoreTrack
+    type: string
+    default: internal
+    values:
+      - internal
+      - alpha
+      - beta
+      - production
+  - name: playStoreReleaseStatus
+    type: string
+    default: completed
+    values:
+      - completed
+      - draft
+      - inProgress
+      - halted
+
+# .NET MAUI Android stack — build/test + signed APK (sideload) + signed AAB
+# with an optional Play Store upload. Deliberately NOT built on the
+# Initialization/json_semantic_version pattern used by the other stacks:
+# every real .NET MAUI Android consumer in the org's portfolio (Belote,
+# sc-app) versions via git tags directly (release/vX.Y.Z) and an
+# Android-specific monotone versionCode, not gitflow-derived SemVer.
+#
+# NOT verified end-to-end: no test Play Store app is available to safely
+# validate a real fastlane supply run against a production listing. See
+# jobs/dotnet_maui/android_release_build.yml for the exact scope of what
+# was and wasn't tested (CICD-19).
+stages:
+  - ${{ if ne(parameters.testProjectPath, '') }}:
+    - stage: Tests
+      displayName: 'Tests'
+      jobs:
+        - job: RunTests
+          displayName: 'dotnet test'
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseDotNet@2
+              displayName: 'Install .NET ${{ parameters.dotnetSdkVersion }} SDK'
+              inputs:
+                packageType: sdk
+                version: '${{ parameters.dotnetSdkVersion }}'
+            - script: |
+                dotnet test ${{ parameters.testProjectPath }} \
+                  -c Release \
+                  --logger "trx;LogFilePrefix=test-results"
+              displayName: 'Run tests'
+            - task: PublishTestResults@2
+              displayName: 'Publish test results'
+              condition: succeededOrFailed()
+              inputs:
+                testResultsFormat: 'VSTest'
+                testResultsFiles: '**/test-results*.trx'
+                failTaskOnFailedTests: true
+
+  - ${{ if eq(parameters.enableApkStage, true) }}:
+    - stage: APK
+      displayName: 'APK Android (sideload)'
+      ${{ if ne(parameters.testProjectPath, '') }}:
+        dependsOn: Tests
+      ${{ if eq(parameters.testProjectPath, '') }}:
+        dependsOn: []
+      condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+      variables:
+        - group: ${{ parameters.signingVariableGroup }}
+        - name: JDK_HOME
+          value: $(Agent.HomeDirectory)/.cache/${{ parameters.appName }}/jdk-17
+        - name: ANDROID_SDK_HOME
+          value: $(Agent.HomeDirectory)/.cache/${{ parameters.appName }}/android-sdk
+      jobs:
+        - template: /jobs/dotnet_maui/android_release_build.yml
+          parameters:
+            csprojPath: ${{ parameters.csprojPath }}
+            dotnetSdkVersion: ${{ parameters.dotnetSdkVersion }}
+            useGlobalJson: ${{ parameters.useGlobalJson }}
+            globalJsonWorkingDirectory: ${{ parameters.globalJsonWorkingDirectory }}
+            jdkHome: $(JDK_HOME)
+            jdkVersion: ${{ parameters.jdkVersion }}
+            androidSdkHome: $(ANDROID_SDK_HOME)
+            androidPlatform: ${{ parameters.androidPlatform }}
+            androidBuildTools: ${{ parameters.androidBuildTools }}
+            keystoreSecureFile: ${{ parameters.keystoreSecureFile }}
+            keystoreAliasVar: ${{ parameters.keystoreAliasVar }}
+            keystoreStorePassVar: ${{ parameters.keystoreStorePassVar }}
+            keystoreKeyPassVar: ${{ parameters.keystoreKeyPassVar }}
+            packageFormat: apk
+            applicationId: ${{ parameters.applicationId }}
+            versionCodeExpression: ${{ parameters.apkVersionCodeExpression }}
+            extraMsBuildArgs: ${{ parameters.extraMsBuildArgs }}
+
+  - stage: PlayStore
+    displayName: 'AAB -> Play Store (${{ parameters.playStoreTrack }})'
+    ${{ if ne(parameters.testProjectPath, '') }}:
+      dependsOn: Tests
+    ${{ if eq(parameters.testProjectPath, '') }}:
+      dependsOn: []
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], '${{ parameters.releaseTagPattern }}'))
+    variables:
+      - group: ${{ parameters.signingVariableGroup }}
+      - name: JDK_HOME
+        value: $(Agent.HomeDirectory)/.cache/${{ parameters.appName }}/jdk-17
+      - name: ANDROID_SDK_HOME
+        value: $(Agent.HomeDirectory)/.cache/${{ parameters.appName }}/android-sdk
+    jobs:
+      - template: /jobs/dotnet_maui/android_release_build.yml
+        parameters:
+          csprojPath: ${{ parameters.csprojPath }}
+          dotnetSdkVersion: ${{ parameters.dotnetSdkVersion }}
+          useGlobalJson: ${{ parameters.useGlobalJson }}
+          globalJsonWorkingDirectory: ${{ parameters.globalJsonWorkingDirectory }}
+          jdkHome: $(JDK_HOME)
+          jdkVersion: ${{ parameters.jdkVersion }}
+          androidSdkHome: $(ANDROID_SDK_HOME)
+          androidPlatform: ${{ parameters.androidPlatform }}
+          androidBuildTools: ${{ parameters.androidBuildTools }}
+          keystoreSecureFile: ${{ parameters.keystoreSecureFile }}
+          keystoreAliasVar: ${{ parameters.keystoreAliasVar }}
+          keystoreStorePassVar: ${{ parameters.keystoreStorePassVar }}
+          keystoreKeyPassVar: ${{ parameters.keystoreKeyPassVar }}
+          packageFormat: aab
+          applicationId: ${{ parameters.applicationId }}
+          versionCodeExpression: ${{ parameters.aabVersionCodeExpression }}
+          displayVersionExpression: ${{ parameters.aabDisplayVersionExpression }}
+          extraMsBuildArgs: ${{ parameters.extraMsBuildArgs }}
+          publishToPlayStore: ${{ parameters.publishToPlayStore }}
+          playPublisherKeySecureFile: ${{ parameters.playPublisherKeySecureFile }}
+          fastlaneDockerfilePath: ${{ parameters.fastlaneDockerfilePath }}
+          playStoreTrack: ${{ parameters.playStoreTrack }}
+          playStoreReleaseStatus: ${{ parameters.playStoreReleaseStatus }}

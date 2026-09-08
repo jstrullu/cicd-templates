@@ -650,6 +650,130 @@ migration complete, per the two caveats above.
 
 ---
 
+## .NET MAUI Android — Belote, sc-app (CICD-19)
+
+New stack, `dotnet_maui_android_pipeline.yml` — no existing stack covered
+mobile Android + Play Store publishing. Not built on the
+`Initialization`/`json_semantic_version.yml` pattern the other 9 stacks
+share: both real consumers version via git tags directly
+(`release/vX.Y.Z`) plus an Android-specific monotone `versionCode`, not
+gitflow-derived SemVer — forcing that pattern onto them would fight their
+actual (working) versioning scheme for no benefit.
+
+**Belote** — the simpler of the two (single pinned SDK, matches the
+template's default):
+
+```yaml
+trigger:
+  branches:
+    include: [master]
+  tags:
+    include: [release/v*]
+pr: none
+
+resources:
+  repositories:
+    - repository: templates
+      type: github
+      name: jstrullu/cicd-templates
+      endpoint: github-connection
+
+extends:
+  template: /azure-pipelines/pipelines/dotnet_maui_android_pipeline.yml@templates
+  parameters:
+    appName: belote
+    applicationId: com.siso.belote
+    csprojPath: Belote.Maui/Belote.Maui.csproj
+    testProjectPath: Belote.Tests/Belote.Tests.csproj
+    keystoreSecureFile: belote-release.keystore
+    signingVariableGroup: Belote-Mobile-Signing
+    publishToPlayStore: true
+    playPublisherKeySecureFile: belote-play-publisher.json
+    fastlaneDockerfilePath: tools/fastlane
+    aabDisplayVersionExpression: |
+      SB="$(Build.SourceBranch)"
+      echo "${SB#refs/tags/release/v}"
+```
+
+**sc-app** — same shape, plus the two real differences: a pinned .NET 9 SDK
+(`useGlobalJson`) and the mobile job depending on a `Backend` CI job that
+this stack doesn't model (sc-app's Mobile job runs `dependsOn: Backend` to
+avoid RAM contention with Postgres testcontainers on the shared agent —
+this template has no equivalent cross-job memory-pressure dependency,
+document it as a known simplification, not a silent behavior change):
+
+```yaml
+trigger:
+  branches:
+    include: [master]
+  tags:
+    include: [release/v*]
+pr: none
+
+resources:
+  repositories:
+    - repository: templates
+      type: github
+      name: jstrullu/cicd-templates
+      endpoint: github-connection
+
+extends:
+  template: /azure-pipelines/pipelines/dotnet_maui_android_pipeline.yml@templates
+  parameters:
+    appName: scapp
+    applicationId: com.scapp.mobile
+    csprojPath: src/ScApp.Mobile/ScApp.Mobile.csproj
+    useGlobalJson: true
+    globalJsonWorkingDirectory: src/ScApp.Mobile
+    androidPlatform: android-35
+    androidBuildTools: 35.0.0
+    keystoreSecureFile: scapp-release.keystore
+    signingVariableGroup: ScApp-Mobile-Signing
+    publishToPlayStore: true
+    playPublisherKeySecureFile: scapp-play-publisher.json
+    fastlaneDockerfilePath: tools/fastlane
+    aabDisplayVersionExpression: |
+      SB="$(Build.SourceBranch)"
+      echo "${SB#refs/tags/release/v}"
+```
+
+Real gaps this migration does **not** close, both explicitly out of scope
+per the user's own answer earlier in this session (the mobile stack was
+never meant to replicate every project-specific optimization, only the
+actually-blocking parts — signing and Play Store publish):
+- sc-app's `Mobile`/`MobileRelease` jobs `dependsOn: Backend` purely to
+  serialize RAM usage on a shared agent — this template runs mobile
+  independently. If the shared agent OOMs under real load, either bump
+  agent RAM or reintroduce a manual `dependsOn` override (not currently a
+  template parameter).
+- Neither project's `.NET`/API-side CI (Belote's own Tests stage is
+  covered via `testProjectPath`; sc-app's `Backend`/`Api` job with
+  Testcontainers Postgres is not modeled by this mobile-only stack — that
+  half of sc-app would need the `dotnetcore` stack in parallel, not this
+  one).
+
+**Real verification done**: `validate_templates.py` 54/54 (was 50). Every
+required parameter cross-checked programmatically against both real
+pipeline call sites. `versionCode`/`displayVersion` computation and the
+`extraMsBuildArgs`/conditional-display-version-flag bash logic were
+extracted and run standalone against Belote's exact real values (BuildId
+4821 → versionCode 4822, tag `release/v1.3.0` → displayVersion `1.3.0`) —
+all matched expected output.
+
+**NOT verified, by explicit user decision (2026-09-08)**: the actual
+`dotnet publish`/signing/`fastlane supply` commands were never executed —
+no CI environment here has the Android SDK, a real keystore, or a
+disposable Play Store app to test against safely. This stack is
+**structurally correct** (every script step is a line-for-line match of
+two real, currently-working pipelines — Belote and sc-app — with only the
+hardcoded values replaced by parameters) but **unproven by actual
+execution**. Before relying on it: run it once against Belote or sc-app's
+real Azure DevOps project, on a low-stakes branch, and confirm the
+produced APK/AAB is byte-for-byte structurally sound (`aapt dump badging`
+or equivalent) before ever setting `publishToPlayStore: true` for real.
+
+---
+
 ## Summary
 
 | Project | Stack template | Ready to migrate as shown? | Real gap found |
@@ -681,8 +805,8 @@ stacks. The remaining Azure DevOps projects, checked 2026-09-08:
 
 | Project | Verdict | Why |
 |---|---|---|
-| **Belote** | ❌ blocked — CICD-19 | Mobile Android + signed APK/AAB + Play Store publish via fastlane. No stack covers this (Flutter deploys to Firebase, not Play Store). |
-| **sc-app** | ❌ blocked — CICD-19 | Same mobile/Play Store gap as Belote, plus a pinned .NET 9 SDK (global.json) distinct from the root SDK 10 — needs its own parameter. Backend/API portion (`.NET` + Helm) already fits `dotnetcore_pipeline.yml` as-is; only the mobile job is blocked. |
+| **Belote** | ✅ migratable — CICD-19 delivered | Mobile Android + signed APK/AAB + Play Store publish via fastlane, new `dotnet_maui_android_pipeline.yml` stack. Structurally verified only — no real `fastlane supply` run against a Play Store app (deliberate, per user decision). |
+| **sc-app** | ✅ migratable — CICD-19 delivered | Same stack, `useGlobalJson` for the pinned .NET 9 SDK. One documented simplification: sc-app's `dependsOn: Backend` RAM-serialization trick has no template equivalent. |
 | **RestoTemplate** | ✅ migratable — CICD-20 delivered | Multi-client monorepo. `astro_pipeline.yml` now supports it via `buildEnvVars` (injects `CLIENT=<slug>` before typecheck/build) and `deployVariableGroup` (links the per-client `Resto-<slug>` variable group into the Deploy stage). See full block below. |
 | **Infrastructure** | ❌ out of scope, not a migration candidate | Pure infra-as-code (Helm/kubectl only, no application to build/test, no Docker image, `git diff`-based change detection driving per-component conditional stages, manual-approval gates on cluster-critical components). This is a fundamentally different pipeline shape than "build → test → push → deploy one app" — cicd-templates was never designed for it and extending it to fit would dilute what the 9 stacks actually do well. Not tracked as a CICD ticket; keep Infrastructure's bespoke pipeline as-is. |
 | **PentestSaaS** | 🟡 on standby | User decision 2026-09-08: put aside for now, alongside QualiForma. Build/test/Docker fits `dotnetcore_pipeline.yml` as-is; deploy fits `deployMode: helm`. Only real gap was a CI frontend job with no template equivalent — not a blocker, revisit when standby lifts. |

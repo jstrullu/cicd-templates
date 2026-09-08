@@ -1,0 +1,78 @@
+parameters:
+  - name: csprojPath
+    displayName: Path to the MAUI Android project (.csproj), e.g. Belote.Maui/Belote.Maui.csproj
+    type: string
+  - name: dotnetSdkVersion
+    displayName: .NET SDK version to install (UseDotNet@2). Ignored when useGlobalJson is true.
+    type: string
+    default: '10.0.302'
+  - name: useGlobalJson
+    displayName: Resolve the SDK version from a project-local global.json instead of dotnetSdkVersion (e.g. a project pinned to an older SDK than the repo root)
+    type: boolean
+    default: false
+  - name: globalJsonWorkingDirectory
+    displayName: Directory containing the local global.json (useGlobalJson mode only, e.g. src/ScApp.Mobile)
+    type: string
+    default: ''
+  - name: jdkHome
+    type: string
+  - name: jdkVersion
+    type: string
+    default: '17.0.13'
+  - name: androidSdkHome
+    type: string
+  - name: androidPlatform
+    type: string
+    default: 'android-36'
+  - name: androidBuildTools
+    type: string
+    default: '36.0.0'
+
+# Unsigned Debug build — CI verification only, no signing secrets needed.
+# Matches sc-app's "Mobile" job: confirms the MAUI Android target still
+# compiles on every push/PR without touching the release-signing path.
+jobs:
+  - job: android_ci_build
+    displayName: 'Android CI build (Debug, unsigned)'
+    timeoutInMinutes: 30
+    steps:
+      - checkout: self
+        fetchDepth: 1
+
+      - ${{ if eq(parameters.useGlobalJson, true) }}:
+        - task: UseDotNet@2
+          displayName: 'Install .NET SDK from global.json'
+          inputs:
+            packageType: sdk
+            useGlobalJson: true
+            workingDirectory: ${{ parameters.globalJsonWorkingDirectory }}
+      - ${{ if eq(parameters.useGlobalJson, false) }}:
+        - task: UseDotNet@2
+          displayName: 'Install .NET ${{ parameters.dotnetSdkVersion }} SDK'
+          inputs:
+            packageType: sdk
+            version: '${{ parameters.dotnetSdkVersion }}'
+
+      - template: /steps/android_bootstrap.yml
+        parameters:
+          jdkHome: ${{ parameters.jdkHome }}
+          jdkVersion: ${{ parameters.jdkVersion }}
+          androidSdkHome: ${{ parameters.androidSdkHome }}
+          androidPlatform: ${{ parameters.androidPlatform }}
+          androidBuildTools: ${{ parameters.androidBuildTools }}
+
+      - script: dotnet workload restore ${{ parameters.csprojPath }}
+        displayName: 'Restore maui-android workload'
+
+      - script: |
+          dotnet build ${{ parameters.csprojPath }} \
+            --configuration Debug \
+            -m:1 \
+            -p:AndroidSdkDirectory=$ANDROID_SDK_ROOT \
+            -p:JavaSdkDirectory=$JAVA_HOME \
+            -p:UseSharedCompilation=false
+        displayName: 'dotnet build (Debug, unsigned)'
+
+      - script: dotnet build-server shutdown
+        displayName: 'Shutdown build servers'
+        condition: always()

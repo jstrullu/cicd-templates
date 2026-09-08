@@ -1,0 +1,63 @@
+parameters:
+  - name: jdkHome
+    displayName: Cache path for the JDK (e.g. $(Agent.HomeDirectory)/.cache/<app>/jdk-17)
+    type: string
+  - name: jdkVersion
+    displayName: Microsoft JDK version to download (e.g. 17.0.13)
+    type: string
+    default: '17.0.13'
+  - name: androidSdkHome
+    displayName: Cache path for the Android SDK (e.g. $(Agent.HomeDirectory)/.cache/<app>/android-sdk)
+    type: string
+  - name: androidPlatform
+    displayName: Android platform package to install (e.g. android-36)
+    type: string
+    default: 'android-36'
+  - name: androidBuildTools
+    displayName: Android build-tools version to install (e.g. 36.0.0)
+    type: string
+    default: '36.0.0'
+  - name: androidCmdlineToolsUrl
+    displayName: Android cmdline-tools zip URL (bump when Google retires the version)
+    type: string
+    default: 'https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip'
+
+# Idempotent JDK 17 + Android SDK bootstrap for a self-hosted agent with
+# neither installed at the system level (the pattern used by every real
+# .NET MAUI Android consumer in the org's portfolio — Belote, sc-app).
+# Both tool sets are cached under $(Agent.HomeDirectory)/.cache so repeat
+# runs on the same agent skip the download/install entirely. Sets
+# JAVA_HOME/ANDROID_SDK_ROOT/ANDROID_HOME as pipeline variables for
+# subsequent steps (dotnet publish -p:JavaSdkDirectory=$JAVA_HOME etc).
+steps:
+  - script: |
+      set -e
+      if [ ! -x "${{ parameters.jdkHome }}/bin/javac" ]; then
+        mkdir -p "${{ parameters.jdkHome }}" && cd /tmp
+        wget -q https://aka.ms/download-jdk/microsoft-jdk-${{ parameters.jdkVersion }}-linux-x64.tar.gz -O jdk.tar.gz
+        tar xzf jdk.tar.gz --strip-components=1 -C "${{ parameters.jdkHome }}" && rm jdk.tar.gz
+      fi
+      "${{ parameters.jdkHome }}/bin/javac" -version
+      echo "##vso[task.setvariable variable=JAVA_HOME]${{ parameters.jdkHome }}"
+      echo "##vso[task.prependpath]${{ parameters.jdkHome }}/bin"
+    displayName: 'Ensure JDK ${{ parameters.jdkVersion }} (cached in $HOME)'
+
+  - script: |
+      set -e
+      SDK="${{ parameters.androidSdkHome }}"
+      if [ ! -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+        mkdir -p "$SDK/cmdline-tools/latest" && cd /tmp
+        wget -q "${{ parameters.androidCmdlineToolsUrl }}" -O cmdline.zip
+        rm -rf "$SDK/cmdline-tools/latest"
+        mkdir -p /tmp/cmdline-tools-extract && cd /tmp/cmdline-tools-extract
+        jar -xf /tmp/cmdline.zip
+        mv cmdline-tools "$SDK/cmdline-tools/latest"
+        cd /tmp && rm -rf /tmp/cmdline-tools-extract cmdline.zip
+        chmod +x "$SDK/cmdline-tools/latest/bin/"*
+      fi
+      yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+      "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+        "platforms;${{ parameters.androidPlatform }}" "build-tools;${{ parameters.androidBuildTools }}" "platform-tools" > /dev/null
+      echo "##vso[task.setvariable variable=ANDROID_SDK_ROOT]$SDK"
+      echo "##vso[task.setvariable variable=ANDROID_HOME]$SDK"
+    displayName: 'Ensure Android SDK (${{ parameters.androidPlatform }}, cached in $HOME)'
