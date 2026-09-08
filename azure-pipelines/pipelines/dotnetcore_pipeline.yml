@@ -1,4 +1,4 @@
-﻿trigger:
+trigger:
   - master
 
 parameters:
@@ -81,6 +81,10 @@ parameters:
     default: true
   - name: insecureRegistryUrl
     displayName: Configure this registry as insecure on the agent (insecure-cli mode, leave empty if already configured)
+    type: string
+    default: ''
+  - name: dockerBuildArgs
+    displayName: Extra --build-arg KEY=VALUE pairs, one per line (mono-image insecure-cli mode)
     type: string
     default: ''
   # kube-manifest (default): KubernetesManifest@0 task, needs a Kubernetes-type
@@ -207,6 +211,7 @@ stages:
             projectVersion: $(version)
             alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
             insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+            buildArgs: ${{ parameters.dockerBuildArgs }}
       - ${{ if and(eq(parameters.dockerPushMode, 'insecure-cli'), ne(length(parameters.dockerImages), 0)) }}:
         - template: /jobs/docker_build_push_insecure_multi.yml
           parameters:

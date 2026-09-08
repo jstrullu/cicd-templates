@@ -22,6 +22,10 @@ parameters:
     displayName: Configure this registry as insecure in /etc/docker/daemon.json (skip if the agent is already configured)
     type: string
     default: ''
+  - name: buildArgs
+    displayName: Extra --build-arg KEY=VALUE pairs, one per line (e.g. VITE_API_URL=$(API_URL))
+    type: string
+    default: ''
 
 # CLI-direct docker build/push, for an in-cluster/self-hosted registry with no
 # Azure DevOps service connection (Docker@2's containerRegistry parameter
@@ -55,30 +59,30 @@ jobs:
             fi
           displayName: 'Ensure insecure registry configured (idempotent)'
 
-      - ${{ if eq(parameters.alsoTagLatest, true) }}:
-        - script: |
-            set -e
-            docker build \
-              -t $(image):${{ parameters.projectVersion }} \
-              -t $(image):latest \
-              -f "${{ parameters.dockerfile }}" \
-              "${{ parameters.context }}"
-          displayName: 'docker build (:${{ parameters.projectVersion }} + :latest)'
-        - script: |
-            set -e
-            docker push $(image):${{ parameters.projectVersion }}
-            docker push $(image):latest
-          displayName: 'docker push (:${{ parameters.projectVersion }} + :latest)'
+      - script: |
+          set -e
+          TAG_FLAGS=(-t "$(image):${{ parameters.projectVersion }}")
+          if [ "${{ parameters.alsoTagLatest }}" = "True" ]; then
+            TAG_FLAGS+=(-t "$(image):latest")
+          fi
 
-      - ${{ if ne(parameters.alsoTagLatest, true) }}:
-        - script: |
-            set -e
-            docker build \
-              -t $(image):${{ parameters.projectVersion }} \
-              -f "${{ parameters.dockerfile }}" \
-              "${{ parameters.context }}"
-          displayName: 'docker build (:${{ parameters.projectVersion }})'
-        - script: |
-            set -e
-            docker push $(image):${{ parameters.projectVersion }}
-          displayName: 'docker push (:${{ parameters.projectVersion }})'
+          BUILD_ARGS_FLAGS=()
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            BUILD_ARGS_FLAGS+=(--build-arg "$line")
+          done <<< "${{ parameters.buildArgs }}"
+
+          docker build \
+            "${TAG_FLAGS[@]}" \
+            -f "${{ parameters.dockerfile }}" \
+            "${BUILD_ARGS_FLAGS[@]}" \
+            "${{ parameters.context }}"
+        displayName: 'docker build (:${{ parameters.projectVersion }})'
+
+      - script: |
+          set -e
+          docker push "$(image):${{ parameters.projectVersion }}"
+          if [ "${{ parameters.alsoTagLatest }}" = "True" ]; then
+            docker push "$(image):latest"
+          fi
+        displayName: 'docker push (:${{ parameters.projectVersion }})'

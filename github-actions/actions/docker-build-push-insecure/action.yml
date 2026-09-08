@@ -27,6 +27,10 @@ inputs:
     description: 'Configurer ce registry comme insecure dans /etc/docker/daemon.json (laisser vide si le runner est déjà configuré)'
     required: false
     default: ''
+  build-args:
+    description: 'Paires --build-arg KEY=VALUE supplémentaires, une par ligne'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -55,11 +59,19 @@ runs:
         set -e
         IMAGE="${{ inputs.registry }}/${{ inputs.image-name }}"
         TAG="${{ inputs.tag }}"
-        BUILD_ARGS="-t $IMAGE:$TAG"
+
+        TAG_FLAGS=(-t "$IMAGE:$TAG")
         if [ "${{ inputs.also-tag-latest }}" = "true" ]; then
-          BUILD_ARGS="$BUILD_ARGS -t $IMAGE:latest"
+          TAG_FLAGS+=(-t "$IMAGE:latest")
         fi
-        docker build $BUILD_ARGS -f "${{ inputs.dockerfile }}" "${{ inputs.context }}"
+
+        BUILD_ARG_FLAGS=()
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          BUILD_ARG_FLAGS+=(--build-arg "$line")
+        done <<< "${{ inputs.build-args }}"
+
+        docker build "${TAG_FLAGS[@]}" -f "${{ inputs.dockerfile }}" "${BUILD_ARG_FLAGS[@]}" "${{ inputs.context }}"
 
     - name: docker push
       shell: bash

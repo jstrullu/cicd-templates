@@ -75,6 +75,10 @@ parameters:
     displayName: Configure this registry as insecure on the agent (insecure-cli mode, leave empty if already configured)
     type: string
     default: ''
+  - name: dockerBuildArgs
+    displayName: Extra --build-arg KEY=VALUE pairs, one per line (mono-image insecure-cli mode)
+    type: string
+    default: ''
   # kube-manifest (default): KubernetesManifest@0 task, needs a Kubernetes-type
   #   Azure DevOps environment resource (kubeconfig) — unchanged behavior.
   # helm: helm upgrade --install direct on an agent already inside the target
@@ -171,6 +175,7 @@ stages:
             projectVersion: $(version)
             alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
             insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+            buildArgs: ${{ parameters.dockerBuildArgs }}
 
   - stage: Deploy
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

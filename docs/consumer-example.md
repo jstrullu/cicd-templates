@@ -73,6 +73,9 @@ switch to `insecure-cli`:
       dockerImageName: 'my-app'             # defaults to appName if omitted
       insecureRegistryUrl: 'registry.internal:5000'  # configures /etc/docker/daemon.json, leave empty if the agent is already configured
       dockerAlsoTagLatest: true             # default
+      dockerBuildArgs: |                    # optional, one KEY=VALUE per line
+        PUBLIC_GA_ID=G-XXXXXXX
+        PUBLIC_SITE_URL=$(PUBLIC_SITE_URL)
       # containerRegistry no longer required in this mode
 ```
 

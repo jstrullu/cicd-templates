@@ -22,6 +22,7 @@ env:
   # insecure-cli: docker build/push CLI direct vers un registry self-hosted/in-cluster
   #   sans authentification, comme le fait chaque pipeline réel du portefeuille.
   DOCKER_PUSH_MODE: 'service-connection'   # service-connection ou insecure-cli
+  DOCKER_BUILD_ARGS: ''       # --build-arg KEY=VALUE, un par ligne (mode insecure-cli)
   # kube-manifest (default): kubectl apply, nécessite le secret KUBECONFIG.
   # helm: helm upgrade --install direct sur un runner déjà connecté au cluster
   #   cible (aucun kubeconfig requis), comme le fait chaque pipeline réel du
@@ -103,6 +104,7 @@ jobs:
           registry: ${{ env.DOCKER_REGISTRY }}
           image-name: ${{ github.event.repository.name }}
           tag: ${{ needs.initialisation.outputs.docker-tag }}
+          build-args: ${{ env.DOCKER_BUILD_ARGS }}
 
   deploy-to-dev:
     runs-on: ubuntu-latest
