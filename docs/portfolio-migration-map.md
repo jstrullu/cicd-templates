@@ -473,16 +473,18 @@ stages:
 | AEAGestion | astro | ✅ yes | none |
 | Agence de la Nive | astro | ✅ yes, with consumer-side `${{ if }}` for the values overlay | secret-with-`$`-character risk not test-covered |
 | Portfolio | dotnetcore | ⚠️ Docker/deploy yes, **frontend CI job has no template slot** | frontend CI dropped if migrated as-is |
-| PentestSaaS | dotnetcore | ⚠️ same as Portfolio + pre-flight dependency check has no slot | frontend CI dropped; dependency pre-flight dropped; per-image tag needs manual `setValues` workaround |
-| QualiForma | dotnetcore | ❌ no | **no Helm chart exists** — Deploy stage not migratable without either writing one or a new job variant |
+| PentestSaaS | dotnetcore | ⚠️ same as Portfolio + pre-flight dependency check has no slot | **on standby (user decision 2026-09-08)** — frontend CI dropped; dependency pre-flight dropped; per-image tag needs manual `setValues` workaround |
+| QualiForma | dotnetcore | ❌ no | **on standby (user decision 2026-09-08)** — CICD-18: no Helm chart exists, Deploy stage not migratable without either writing one or a new job variant |
 | paymenthub | dotnetcore, staged | ✅ yes | none |
 | ShopTemplate | dotnetcore, staged | ❌ no, not as designed | frontend needs 2 different build-args per stage, contradicts `enableStagedDeploy`'s "same image promoted" assumption |
 
 **3 of 8 are ready to paste in today** (after the manual service connection
-step). **3 need a documented gap accepted or worked around** (Portfolio,
-PentestSaaS, Agence de la Nive). **2 are blocked** on real repo work
-(QualiForma needs a Helm chart; ShopTemplate needs a template feature this
-repo doesn't have yet).
+step). **1 needs a documented gap accepted** (Portfolio). **2 are on
+standby by user decision, not blockers** (PentestSaaS, QualiForma — the
+technical analysis below still stands for whenever standby lifts).
+**1 is blocked** on real repo work (ShopTemplate needs a template feature
+this repo doesn't have yet, tracked as CICD-17). Agence de la Nive is
+covered separately above (not part of this multi-image group).
 
 ---
 
@@ -497,11 +499,14 @@ stacks. The remaining Azure DevOps projects, checked 2026-09-08:
 | **sc-app** | ❌ blocked — CICD-19 | Same mobile/Play Store gap as Belote, plus a pinned .NET 9 SDK (global.json) distinct from the root SDK 10 — needs its own parameter. Backend/API portion (`.NET` + Helm) already fits `dotnetcore_pipeline.yml` as-is; only the mobile job is blocked. |
 | **RestoTemplate** | ⚠️ blocked pending a prototype — CICD-20 | Multi-client monorepo, one parameterized pipeline builds/deploys one client (`clients/<slug>`) at a time. Might already work with existing `astro_pipeline.yml` parameters (appName, helmValuesFile) resolved client-side in the consumer pipeline's `variables:` block — not yet tested for real. See CICD-20: prototype before coding any template change. |
 | **Infrastructure** | ❌ out of scope, not a migration candidate | Pure infra-as-code (Helm/kubectl only, no application to build/test, no Docker image, `git diff`-based change detection driving per-component conditional stages, manual-approval gates on cluster-critical components). This is a fundamentally different pipeline shape than "build → test → push → deploy one app" — cicd-templates was never designed for it and extending it to fit would dilute what the 9 stacks actually do well. Not tracked as a CICD ticket; keep Infrastructure's bespoke pipeline as-is. |
+| **PentestSaaS** | 🟡 on standby | User decision 2026-09-08: put aside for now, alongside QualiForma. Build/test/Docker fits `dotnetcore_pipeline.yml` as-is; deploy fits `deployMode: helm`. Only real gap was a CI frontend job with no template equivalent — not a blocker, revisit when standby lifts. |
+| **QualiForma** | 🟡 on standby — CICD-18 | User decision 2026-09-08: put aside for now, alongside PentestSaaS. CICD-18 still tracks the real technical gap (no Helm chart) for when standby lifts, downgraded to Low priority, labeled `en-standby`. |
 | **Kuenta** | Deliberately excluded | 3 years inactive (last CI run 2023-09-12) — user decision 2026-09-08, not tracked. |
 | **CommandAppli** | Deliberately excluded | No pipeline configured, not cloned locally — user decision 2026-09-08, not tracked. |
 
 **Updated totals**: of the 14 Azure DevOps projects in the org, **11 are
 realistically in scope for cicd-templates** (8 mapped above + Belote +
-sc-app + RestoTemplate pending CICD-19/20), **1 is intentionally out of
-scope by design** (Infrastructure), **2 are excluded by explicit user
-decision** (Kuenta, CommandAppli).
+sc-app + RestoTemplate pending CICD-19/20), **2 are on standby by user
+decision** (PentestSaaS, QualiForma — CICD-18 downgraded to Low), **1 is
+intentionally out of scope by design** (Infrastructure), **2 are excluded
+by explicit user decision** (Kuenta, CommandAppli).
