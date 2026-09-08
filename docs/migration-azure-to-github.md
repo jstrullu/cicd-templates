@@ -233,6 +233,28 @@ stages:
 
 GitHub Actions: Copy `github-actions/workflow-templates/flutter_pipeline.yml` — Flutter uses a different versioning system (Cider/pubspec.yaml) so the workflow structure is unique.
 
+### Astro
+
+Azure:
+```yaml
+stages:
+  - template: azure-pipelines/pipelines/astro_pipeline.yml@templates
+    parameters:
+      typecheckScript: 'typecheck'   # runs `astro check`
+```
+
+GitHub Actions: Copy `github-actions/workflow-templates/astro_pipeline.yml` and set:
+```yaml
+env:
+  TYPECHECK_SCRIPT: 'typecheck'
+  BUILD_SCRIPT: 'build'
+```
+
+No Docker/deploy stages by default — most Astro sites are static or served
+via a lightweight adapter. Extend the copied file (or the Azure pipeline
+parameters `dockerRegistry`/`containerRegistry`) if you need them. No unit
+test step either unless `enableTests`/`ENABLE_TESTS` is turned on.
+
 ---
 
 ## Conditions Syntax Reference

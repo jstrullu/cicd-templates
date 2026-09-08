@@ -203,6 +203,32 @@ stages:
       containerRegistry: 'my-docker-connection'
 ```
 
+### Astro
+
+Astro sites in the portfolio typically don't ship unit tests — `enableTests`
+stays `false` unless the project has added one (Vitest, etc.).
+
+```yaml
+trigger:
+  - master
+
+resources:
+  repositories:
+    - repository: templates
+      type: github
+      name: jstrullu/cicd-templates
+      endpoint: github-connection
+
+stages:
+  - template: azure-pipelines/pipelines/astro_pipeline.yml@templates
+    parameters:
+      versionIncrement: 'patch'
+      typecheckScript: 'typecheck'   # runs `astro check`
+      buildScript: 'build'
+      dockerRegistry: 'myapp'
+      containerRegistry: 'my-docker-connection'
+```
+
 ---
 
 ## GitHub Actions Examples
@@ -404,6 +430,75 @@ jobs:
           release-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}
           language: 'go'
+```
+
+### Astro
+
+Copy `github-actions/workflow-templates/astro_pipeline.yml` into your
+`.github/workflows/` directory and edit the `env` section. No Docker/deploy
+stages by default (most Astro sites in the portfolio are static or served
+via a lightweight adapter) — extend the copied file if you need them.
+
+```yaml
+# .github/workflows/pipeline.yml
+name: Astro Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  VERSION_INCREMENT: 'patch'
+  NODE_VERSION: '20'
+  PACKAGE_MANAGER: 'npm'
+  TYPECHECK_SCRIPT: 'typecheck'   # runs `astro check`
+  BUILD_SCRIPT: 'build'
+  FICHIER_JSON: 'cicd.json'
+
+jobs:
+  initialisation:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.versioning.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: versioning
+        uses: jstrullu/cicd-templates/github-actions/actions/semantic-version@master
+        with:
+          version-increment: ${{ env.VERSION_INCREMENT }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+
+  build-and-typecheck:
+    runs-on: ubuntu-latest
+    needs: initialisation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jstrullu/cicd-templates/github-actions/actions/astro/build-test@master
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager: ${{ env.PACKAGE_MANAGER }}
+          typecheck-script: ${{ env.TYPECHECK_SCRIPT }}
+          build-script: ${{ env.BUILD_SCRIPT }}
+          project-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+
+  finalisation:
+    runs-on: ubuntu-latest
+    needs: [initialisation, build-and-typecheck]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: jstrullu/cicd-templates/github-actions/actions/finalisation@master
+        with:
+          release-version: ${{ needs.initialisation.outputs.version }}
+          fichier-json: ${{ env.FICHIER_JSON }}
+          language: 'node'
 ```
 
 ---

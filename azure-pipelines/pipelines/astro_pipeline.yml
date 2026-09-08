@@ -1,0 +1,162 @@
+trigger:
+  - master
+
+parameters:
+  - name: appName
+    displayName: Application name
+    type: string
+    default: $(Build.Repository.Name)
+  - name: jsonFile
+    type: string
+    default: cicd.json
+  - name: versionIncrement
+    type: string
+    default: 'patch'
+  - name: gitFlowType
+    displayName: Git flow strategy
+    type: string
+    default: github-flow
+    values:
+      - github-flow
+      - gitflow
+      - trunk-based
+      - gitlab-flow
+  - name: developIncrement
+    displayName: Version increment for develop branch (gitflow)
+    type: string
+    default: patch
+  - name: releaseIncrement
+    displayName: Version increment for release branches (gitflow)
+    type: string
+    default: minor
+  - name: hotfixIncrement
+    displayName: Version increment for hotfix branches (gitflow)
+    type: string
+    default: patch
+  - name: nodeVersion
+    displayName: Node.js version
+    type: string
+    default: '20.x'
+  - name: packageManager
+    displayName: Package manager
+    type: string
+    default: npm
+    values:
+      - npm
+      - yarn
+  - name: typecheckScript
+    displayName: npm/yarn script name for `astro check`
+    type: string
+    default: 'typecheck'
+  - name: buildScript
+    displayName: Build script name
+    type: string
+    default: build
+  - name: enableTests
+    displayName: Run a test script after typecheck/build
+    type: boolean
+    default: false
+  - name: testScript
+    displayName: Test script name
+    type: string
+    default: test
+  - name: sonarKey
+    type: string
+    default: ''
+  - name: dockerRegistry
+    type: string
+  - name: containerRegistry
+    type: string
+  - name: enableSecurityChecks
+    displayName: Enable security checks
+    type: boolean
+    default: false
+  - name: securityTargetFile
+    displayName: Target file for Snyk (e.g. package.json)
+    type: string
+    default: 'package.json'
+
+stages:
+  - stage: Initialization
+    jobs:
+      - template: /jobs/json_semantic_version.yml
+        parameters:
+          versionIncrement: ${{ parameters.versionIncrement }}
+          jsonFile: ${{ parameters.jsonFile }}
+          gitFlowType: ${{ parameters.gitFlowType }}
+          developIncrement: ${{ parameters.developIncrement }}
+          releaseIncrement: ${{ parameters.releaseIncrement }}
+          hotfixIncrement: ${{ parameters.hotfixIncrement }}
+
+  - stage: Build_And_Typecheck
+    dependsOn: Initialization
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+    jobs:
+      - template: /jobs/astro/astro_build_test.yml
+        parameters:
+          sonarKey: ${{ parameters.sonarKey }}
+          nodeVersion: ${{ parameters.nodeVersion }}
+          packageManager: ${{ parameters.packageManager }}
+          typecheckScript: ${{ parameters.typecheckScript }}
+          buildScript: ${{ parameters.buildScript }}
+          enableTests: ${{ parameters.enableTests }}
+          testScript: ${{ parameters.testScript }}
+          projectVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+
+  - ${{ if eq(parameters.enableSecurityChecks, true) }}:
+    - stage: Security_Checks
+      dependsOn: Initialization
+      jobs:
+        - template: /jobs/node/security_checks.yml
+          parameters:
+            targetFile: ${{ parameters.securityTargetFile }}
+
+  - stage: Docker_Build_And_Publish
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+    dependsOn:
+      - Initialization
+      - Build_And_Typecheck
+    jobs:
+      - template: /jobs/docker_build_and_publish.yml
+        parameters:
+          registry: ${{ parameters.dockerRegistry }}
+          containerRegistry: ${{ parameters.containerRegistry }}
+          projectVersion: $(version)
+
+  - stage: Deploy
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+    dependsOn:
+      - Initialization
+      - Build_And_Typecheck
+      - Docker_Build_And_Publish
+    variables:
+      BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+    jobs:
+      - template: /jobs/kube_deploy.yml
+        parameters:
+          env: $(deployEnv)
+          resource: ${{ parameters.appName }}
+          namespace: ${{ parameters.appName }}
+
+  - stage: Finalization
+    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
+    dependsOn:
+      - Initialization
+      - Build_And_Typecheck
+      - Docker_Build_And_Publish
+      - Deploy
+    variables:
+      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
+    jobs:
+      - template: /jobs/finalisation.yml
+        parameters:
+          releaseVersion: $(version)
+          jsonFile: ${{ parameters.jsonFile }}
+          language: 'node'
+          shouldTag: $(shouldTag)
