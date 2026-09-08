@@ -156,10 +156,9 @@ stages:
   - ${{ if eq(parameters.enableApkStage, true) }}:
     - stage: APK
       displayName: 'APK Android (sideload)'
-      ${{ if ne(parameters.testProjectPath, '') }}:
-        dependsOn: Tests
-      ${{ if eq(parameters.testProjectPath, '') }}:
-        dependsOn: []
+      dependsOn:
+        - ${{ if ne(parameters.testProjectPath, '') }}:
+          - Tests
       condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
       variables:
         - group: ${{ parameters.signingVariableGroup }}
@@ -190,10 +189,9 @@ stages:
 
   - stage: PlayStore
     displayName: 'AAB -> Play Store (${{ parameters.playStoreTrack }})'
-    ${{ if ne(parameters.testProjectPath, '') }}:
-      dependsOn: Tests
-    ${{ if eq(parameters.testProjectPath, '') }}:
-      dependsOn: []
+    dependsOn:
+      - ${{ if ne(parameters.testProjectPath, '') }}:
+        - Tests
     condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], '${{ parameters.releaseTagPattern }}'))
     variables:
       - group: ${{ parameters.signingVariableGroup }}
