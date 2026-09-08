@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CICD-6: fix jstrullu/cicd references to jstrullu/cicd-templates
 - updating actions versions to latest
 
+### Fixed
+- CICD-19 yamllint failure - duplicate PLACEHOLDER key
+
 ### Documentation
 - mark PentestSaaS and QualiForma as on standby, not blocked
 - cover the full 14-project Azure DevOps portfolio, not just 8
