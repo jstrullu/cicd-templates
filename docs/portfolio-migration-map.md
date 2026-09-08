@@ -483,3 +483,25 @@ step). **3 need a documented gap accepted or worked around** (Portfolio,
 PentestSaaS, Agence de la Nive). **2 are blocked** on real repo work
 (QualiForma needs a Helm chart; ShopTemplate needs a template feature this
 repo doesn't have yet).
+
+---
+
+## The rest of the Azure DevOps portfolio (14 projects total)
+
+The 8 above cover every project that already fits one of the 9 existing
+stacks. The remaining Azure DevOps projects, checked 2026-09-08:
+
+| Project | Verdict | Why |
+|---|---|---|
+| **Belote** | ❌ blocked — CICD-19 | Mobile Android + signed APK/AAB + Play Store publish via fastlane. No stack covers this (Flutter deploys to Firebase, not Play Store). |
+| **sc-app** | ❌ blocked — CICD-19 | Same mobile/Play Store gap as Belote, plus a pinned .NET 9 SDK (global.json) distinct from the root SDK 10 — needs its own parameter. Backend/API portion (`.NET` + Helm) already fits `dotnetcore_pipeline.yml` as-is; only the mobile job is blocked. |
+| **RestoTemplate** | ⚠️ blocked pending a prototype — CICD-20 | Multi-client monorepo, one parameterized pipeline builds/deploys one client (`clients/<slug>`) at a time. Might already work with existing `astro_pipeline.yml` parameters (appName, helmValuesFile) resolved client-side in the consumer pipeline's `variables:` block — not yet tested for real. See CICD-20: prototype before coding any template change. |
+| **Infrastructure** | ❌ out of scope, not a migration candidate | Pure infra-as-code (Helm/kubectl only, no application to build/test, no Docker image, `git diff`-based change detection driving per-component conditional stages, manual-approval gates on cluster-critical components). This is a fundamentally different pipeline shape than "build → test → push → deploy one app" — cicd-templates was never designed for it and extending it to fit would dilute what the 9 stacks actually do well. Not tracked as a CICD ticket; keep Infrastructure's bespoke pipeline as-is. |
+| **Kuenta** | Deliberately excluded | 3 years inactive (last CI run 2023-09-12) — user decision 2026-09-08, not tracked. |
+| **CommandAppli** | Deliberately excluded | No pipeline configured, not cloned locally — user decision 2026-09-08, not tracked. |
+
+**Updated totals**: of the 14 Azure DevOps projects in the org, **11 are
+realistically in scope for cicd-templates** (8 mapped above + Belote +
+sc-app + RestoTemplate pending CICD-19/20), **1 is intentionally out of
+scope by design** (Infrastructure), **2 are excluded by explicit user
+decision** (Kuenta, CommandAppli).
