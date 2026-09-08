@@ -60,6 +60,22 @@ stages:
       containerRegistry: 'my-docker-connection'
 ```
 
+**Docker push mode.** By default (`dockerPushMode: 'service-connection'`),
+this uses the `Docker@2` task and requires the `containerRegistry` service
+connection above. For an in-cluster/self-hosted registry with no service
+connection (matches every real consumer pipeline in the org's portfolio),
+switch to `insecure-cli`:
+
+```yaml
+    parameters:
+      dockerPushMode: 'insecure-cli'
+      dockerRegistry: 'registry.internal:5000'
+      dockerImageName: 'my-app'             # defaults to appName if omitted
+      insecureRegistryUrl: 'registry.internal:5000'  # configures /etc/docker/daemon.json, leave empty if the agent is already configured
+      dockerAlsoTagLatest: true             # default
+      # containerRegistry no longer required in this mode
+```
+
 ### Java/Gradle
 
 ```yaml

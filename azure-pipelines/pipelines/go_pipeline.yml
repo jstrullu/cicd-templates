@@ -55,6 +55,30 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  # service-connection (default): Docker@2 task, needs an Azure DevOps
+  #   containerRegistry service connection — unchanged behavior.
+  # insecure-cli: docker build/push CLI direct against an in-cluster/self-hosted
+  #   registry with no service connection, matching every real consumer
+  #   pipeline in the org's portfolio (docker build + docker push, no login).
+  - name: dockerPushMode
+    displayName: Docker push mode
+    type: string
+    default: service-connection
+    values:
+      - service-connection
+      - insecure-cli
+  - name: dockerImageName
+    displayName: Image name for insecure-cli mode (defaults to appName)
+    type: string
+    default: ''
+  - name: dockerAlsoTagLatest
+    displayName: Also push :latest (insecure-cli mode)
+    type: boolean
+    default: true
+  - name: insecureRegistryUrl
+    displayName: Configure this registry as insecure on the agent (insecure-cli mode, leave empty if already configured)
+    type: string
+    default: ''
   - name: enableMutationTesting
     displayName: Enable mutation testing
     type: boolean
@@ -117,11 +141,20 @@ stages:
       - Initialization
       - Build_And_Test
     jobs:
-      - template: /jobs/docker_build_and_publish.yml
-        parameters:
-          registry: ${{ parameters.dockerRegistry }}
-          containerRegistry: ${{ parameters.containerRegistry }}
-          projectVersion: $(version)
+      - ${{ if eq(parameters.dockerPushMode, 'service-connection') }}:
+        - template: /jobs/docker_build_and_publish.yml
+          parameters:
+            registry: ${{ parameters.dockerRegistry }}
+            containerRegistry: ${{ parameters.containerRegistry }}
+            projectVersion: $(version)
+      - ${{ if eq(parameters.dockerPushMode, 'insecure-cli') }}:
+        - template: /jobs/docker_build_push_insecure.yml
+          parameters:
+            registry: ${{ parameters.dockerRegistry }}
+            imageName: ${{ coalesce(parameters.dockerImageName, parameters.appName) }}
+            projectVersion: $(version)
+            alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
+            insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
 
   - stage: Deploy
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))

@@ -1,0 +1,73 @@
+name: 'Docker Build & Push (registre insecure)'
+description: 'Build et push CLI direct d''une image Docker vers un registre self-hosted/in-cluster sans authentification (registre insecure), sans passer par docker/login-action'
+
+inputs:
+  registry:
+    description: 'Adresse du registry Docker (ex: registry.internal:5000 ou ghcr.io/org)'
+    required: true
+  image-name:
+    description: 'Nom de l''image Docker'
+    required: true
+  tag:
+    description: 'Tag de l''image Docker'
+    required: true
+  dockerfile:
+    description: 'Chemin vers le Dockerfile'
+    required: false
+    default: './Dockerfile'
+  context:
+    description: 'Contexte de build Docker'
+    required: false
+    default: '.'
+  also-tag-latest:
+    description: 'Pousser aussi la même image en :latest'
+    required: false
+    default: 'true'
+  insecure-registry-url:
+    description: 'Configurer ce registry comme insecure dans /etc/docker/daemon.json (laisser vide si le runner est déjà configuré)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Nettoyage des artefacts Docker anciens
+      shell: bash
+      run: docker system prune -f --filter "until=72h"
+
+    - name: Configuration du registry insecure (idempotent)
+      if: inputs.insecure-registry-url != ''
+      shell: bash
+      run: |
+        set -e
+        DAEMON_JSON="/etc/docker/daemon.json"
+        TARGET="${{ inputs.insecure-registry-url }}"
+        if [ -f "$DAEMON_JSON" ] && grep -q "$TARGET" "$DAEMON_JSON" 2>/dev/null; then
+          echo "Registry $TARGET déjà configuré comme insecure — pas de redémarrage du daemon."
+        else
+          echo "{ \"insecure-registries\" : [\"$TARGET\"] }" | sudo tee "$DAEMON_JSON"
+          sudo service docker restart
+        fi
+
+    - name: docker build
+      shell: bash
+      run: |
+        set -e
+        IMAGE="${{ inputs.registry }}/${{ inputs.image-name }}"
+        TAG="${{ inputs.tag }}"
+        BUILD_ARGS="-t $IMAGE:$TAG"
+        if [ "${{ inputs.also-tag-latest }}" = "true" ]; then
+          BUILD_ARGS="$BUILD_ARGS -t $IMAGE:latest"
+        fi
+        docker build $BUILD_ARGS -f "${{ inputs.dockerfile }}" "${{ inputs.context }}"
+
+    - name: docker push
+      shell: bash
+      run: |
+        set -e
+        IMAGE="${{ inputs.registry }}/${{ inputs.image-name }}"
+        TAG="${{ inputs.tag }}"
+        docker push "$IMAGE:$TAG"
+        if [ "${{ inputs.also-tag-latest }}" = "true" ]; then
+          docker push "$IMAGE:latest"
+        fi

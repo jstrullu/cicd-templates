@@ -102,6 +102,25 @@ Verify that:
 - For GitHub Container Registry (ghcr.io), use a personal access token with `write:packages` scope
 - For Docker Hub, use an access token (not your password)
 
+### "No service connection configured" / in-cluster registry with no auth
+
+If your Docker registry is self-hosted/in-cluster and the self-hosted agent
+already has network access to it (no service connection exists, and none is
+needed), the default `Docker@2`/`docker/login-action` path will fail because
+there's nothing to authenticate against. Switch to the CLI-direct mode
+instead of trying to fabricate a service connection:
+
+- **Azure Pipelines:** `dockerPushMode: 'insecure-cli'` on the pipeline
+  parameters, plus `insecureRegistryUrl` (configures
+  `/etc/docker/daemon.json` on the agent — idempotent, safe to leave set
+  even if the agent is already configured).
+- **GitHub Actions:** `DOCKER_PUSH_MODE: 'insecure-cli'` in the workflow
+  `env:` section. No `DOCKER_USERNAME`/`DOCKER_PASSWORD` secrets needed in
+  this mode.
+
+Both modes push `:TAG` and `:latest` by default (`dockerAlsoTagLatest` /
+image tagging is on unless explicitly turned off).
+
 ### Image push rejected
 
 - Check that the `dockerRegistry` value matches the repository path in your registry

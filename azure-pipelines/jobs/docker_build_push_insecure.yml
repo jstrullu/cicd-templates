@@ -1,0 +1,84 @@
+parameters:
+  - name: registry
+    displayName: Registry host (e.g. registry.internal:5000 or ghcr.io/org)
+    type: string
+  - name: imageName
+    displayName: Image name (e.g. my-app-api) — repository is registry/imageName
+    type: string
+  - name: projectVersion
+    type: string
+  - name: dockerfile
+    type: string
+    default: 'Dockerfile'
+  - name: context
+    displayName: Docker build context, relative to repo root
+    type: string
+    default: '.'
+  - name: alsoTagLatest
+    displayName: Also push the same image as :latest
+    type: boolean
+    default: true
+  - name: insecureRegistryUrl
+    displayName: Configure this registry as insecure in /etc/docker/daemon.json (skip if the agent is already configured)
+    type: string
+    default: ''
+
+# CLI-direct docker build/push, for an in-cluster/self-hosted registry with no
+# Azure DevOps service connection (Docker@2's containerRegistry parameter
+# requires one). Matches the pattern used by every real consumer pipeline in
+# the org's portfolio: `docker build` + `docker push`, both :TAG and :latest,
+# no login step because the self-hosted agent already has network access to
+# the in-cluster registry and it's configured insecure at the daemon level.
+jobs:
+  - job: build_and_push_image
+    timeoutInMinutes: 30
+    variables:
+      image: '${{ parameters.registry }}/${{ parameters.imageName }}'
+    steps:
+      - download: current
+        artifact: drop
+      - bash: cp -rf $(Pipeline.Workspace)/drop/* ./
+
+      - script: docker system prune -f --filter "until=72h"
+        displayName: 'Prune old Docker artifacts'
+
+      - ${{ if ne(parameters.insecureRegistryUrl, '') }}:
+        - script: |
+            set -e
+            DAEMON_JSON="/etc/docker/daemon.json"
+            TARGET="${{ parameters.insecureRegistryUrl }}"
+            if [ -f "$DAEMON_JSON" ] && grep -q "$TARGET" "$DAEMON_JSON" 2>/dev/null; then
+              echo "Registry $TARGET already configured as insecure — skipping daemon restart."
+            else
+              echo "{ \"insecure-registries\" : [\"$TARGET\"] }" | sudo tee "$DAEMON_JSON"
+              sudo service docker restart
+            fi
+          displayName: 'Ensure insecure registry configured (idempotent)'
+
+      - ${{ if eq(parameters.alsoTagLatest, true) }}:
+        - script: |
+            set -e
+            docker build \
+              -t $(image):${{ parameters.projectVersion }} \
+              -t $(image):latest \
+              -f "${{ parameters.dockerfile }}" \
+              "${{ parameters.context }}"
+          displayName: 'docker build (:${{ parameters.projectVersion }} + :latest)'
+        - script: |
+            set -e
+            docker push $(image):${{ parameters.projectVersion }}
+            docker push $(image):latest
+          displayName: 'docker push (:${{ parameters.projectVersion }} + :latest)'
+
+      - ${{ if ne(parameters.alsoTagLatest, true) }}:
+        - script: |
+            set -e
+            docker build \
+              -t $(image):${{ parameters.projectVersion }} \
+              -f "${{ parameters.dockerfile }}" \
+              "${{ parameters.context }}"
+          displayName: 'docker build (:${{ parameters.projectVersion }})'
+        - script: |
+            set -e
+            docker push $(image):${{ parameters.projectVersion }}
+          displayName: 'docker push (:${{ parameters.projectVersion }})'

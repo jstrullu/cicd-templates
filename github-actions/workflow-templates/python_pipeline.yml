@@ -17,6 +17,11 @@ env:
   REQUIREMENTS_FILE: 'requirements.txt'
   TEST_DIRECTORY: 'tests'
   DOCKER_REGISTRY: ''         # Adresse du registry Docker (ex: ghcr.io/org)
+  # service-connection (default): docker/login-action + docker/build-push-action,
+  #   nécessite DOCKER_USERNAME/DOCKER_PASSWORD.
+  # insecure-cli: docker build/push CLI direct vers un registry self-hosted/in-cluster
+  #   sans authentification, comme le fait chaque pipeline réel du portefeuille.
+  DOCKER_PUSH_MODE: 'service-connection'   # service-connection ou insecure-cli
   KUBE_NAMESPACE: ''          # Namespace Kubernetes cible
 
 jobs:
@@ -76,7 +81,8 @@ jobs:
         with:
           name: drop
           path: ${{ github.workspace }}
-      - name: Docker Build & Push
+      - name: Docker Build & Push (service-connection)
+        if: ${{ env.DOCKER_PUSH_MODE == 'service-connection' }}
         uses: jstrullu/cicd-templates/github-actions/actions/docker-build-push@master
         with:
           registry: ${{ env.DOCKER_REGISTRY }}
@@ -84,6 +90,13 @@ jobs:
           tag: ${{ needs.initialisation.outputs.docker-tag }}
           registry-username: ${{ secrets.DOCKER_USERNAME }}
           registry-password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Docker Build & Push (insecure-cli)
+        if: ${{ env.DOCKER_PUSH_MODE == 'insecure-cli' }}
+        uses: jstrullu/cicd-templates/github-actions/actions/docker-build-push-insecure@master
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          image-name: ${{ github.event.repository.name }}
+          tag: ${{ needs.initialisation.outputs.docker-tag }}
 
   deploy-to-dev:
     runs-on: ubuntu-latest
