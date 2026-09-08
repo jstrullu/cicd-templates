@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - adding badges for CI status and released version
 
 ### Changed
+- CICD-12: multi-image Docker support (dotnetcore stack)
 - CICD-10: Helm deploy CLI direct (agent already in-cluster)
 - CICD-9: Docker build/push CLI direct (insecure in-cluster registry)
 - CICD-8: optional git-sha versioning strategy alongside semver
