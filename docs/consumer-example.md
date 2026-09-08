@@ -45,7 +45,7 @@ resources:
   repositories:
     - repository: templates
       type: github
-      name: jstrullu/cicd
+      name: jstrullu/cicd-templates
       endpoint: github-connection  # Your GitHub service connection
 
 stages:
@@ -70,7 +70,7 @@ resources:
   repositories:
     - repository: templates
       type: github
-      name: jstrullu/cicd
+      name: jstrullu/cicd-templates
       endpoint: github-connection
 
 stages:
@@ -93,7 +93,7 @@ resources:
   repositories:
     - repository: templates
       type: github
-      name: jstrullu/cicd
+      name: jstrullu/cicd-templates
       endpoint: github-connection
 
 stages:
@@ -117,7 +117,7 @@ resources:
   repositories:
     - repository: templates
       type: github
-      name: jstrullu/cicd
+      name: jstrullu/cicd-templates
       endpoint: github-connection
 
 stages:
@@ -142,7 +142,7 @@ resources:
   repositories:
     - repository: templates
       type: github
-      name: jstrullu/cicd
+      name: jstrullu/cicd-templates
       endpoint: github-connection
 
 stages:
@@ -165,7 +165,7 @@ resources:
   repositories:
     - repository: templates
       type: github
-      name: jstrullu/cicd
+      name: jstrullu/cicd-templates
       endpoint: github-connection
 
 stages:
@@ -191,7 +191,7 @@ resources:
   repositories:
     - repository: templates
       type: github
-      name: jstrullu/cicd
+      name: jstrullu/cicd-templates
       endpoint: github-connection
 
 stages:
@@ -240,7 +240,7 @@ jobs:
           fetch-depth: 0
       - name: Versionnement sémantique
         id: versioning
-        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        uses: jstrullu/cicd-templates/github-actions/actions/semantic-version@master
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
           fichier-json: ${{ env.FICHIER_JSON }}
@@ -251,7 +251,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build & Test .NET Core
-        uses: jstrullu/cicd/github-actions/actions/dotnetcore/build-test@master
+        uses: jstrullu/cicd-templates/github-actions/actions/dotnetcore/build-test@master
         with:
           sonar-project-key: ${{ env.SONAR_KEY }}
           project-file: ${{ env.PROJECT_FILE }}
@@ -268,7 +268,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Finalisation
-        uses: jstrullu/cicd/github-actions/actions/finalisation@master
+        uses: jstrullu/cicd-templates/github-actions/actions/finalisation@master
         with:
           release-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}
@@ -308,7 +308,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: versioning
-        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        uses: jstrullu/cicd-templates/github-actions/actions/semantic-version@master
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
           fichier-json: ${{ env.FICHIER_JSON }}
@@ -318,7 +318,7 @@ jobs:
     needs: initialisation
     steps:
       - uses: actions/checkout@v4
-      - uses: jstrullu/cicd/github-actions/actions/python/build-test@master
+      - uses: jstrullu/cicd-templates/github-actions/actions/python/build-test@master
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           requirements-file: ${{ env.REQUIREMENTS_FILE }}
@@ -336,7 +336,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: jstrullu/cicd/github-actions/actions/finalisation@master
+      - uses: jstrullu/cicd-templates/github-actions/actions/finalisation@master
         with:
           release-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}
@@ -373,7 +373,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: versioning
-        uses: jstrullu/cicd/github-actions/actions/semantic-version@master
+        uses: jstrullu/cicd-templates/github-actions/actions/semantic-version@master
         with:
           version-increment: ${{ env.VERSION_INCREMENT }}
           fichier-json: ${{ env.FICHIER_JSON }}
@@ -383,7 +383,7 @@ jobs:
     needs: initialisation
     steps:
       - uses: actions/checkout@v4
-      - uses: jstrullu/cicd/github-actions/actions/go/build-test@master
+      - uses: jstrullu/cicd-templates/github-actions/actions/go/build-test@master
         with:
           go-version: ${{ env.GO_VERSION }}
           project-version: ${{ needs.initialisation.outputs.version }}
@@ -399,7 +399,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: jstrullu/cicd/github-actions/actions/finalisation@master
+      - uses: jstrullu/cicd-templates/github-actions/actions/finalisation@master
         with:
           release-version: ${{ needs.initialisation.outputs.version }}
           fichier-json: ${{ env.FICHIER_JSON }}

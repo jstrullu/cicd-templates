@@ -168,8 +168,8 @@ permissions:
 
 If your organization restricts GitHub Actions:
 1. Go to **Settings > Actions > General**
-2. Under "Actions permissions", allow actions from `jstrullu/cicd`
-3. Or use the "Allow select actions" option and add `jstrullu/cicd/*`
+2. Under "Actions permissions", allow actions from `jstrullu/cicd-templates`
+3. Or use the "Allow select actions" option and add `jstrullu/cicd-templates/*`
 
 ---
 
