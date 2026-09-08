@@ -35,6 +35,10 @@ parameters:
   - name: testScript
     type: string
     default: test
+  - name: buildEnvVars
+    displayName: Extra env vars for typecheck/build, one KEY=VALUE per line (e.g. a monorepo client selector)
+    type: string
+    default: ''
 
 jobs:
   - job: Build_Typecheck
@@ -94,11 +98,25 @@ jobs:
           extraProperties: |
             sonar.projectVersion=${{ parameters.projectVersion }}
 
-    - script: npm run ${{ parameters.typecheckScript }}
+    - script: |
+        set -a
+        while IFS='=' read -r key value; do
+          [ -z "$key" ] && continue
+          export "$key=$value"
+        done <<< "${{ parameters.buildEnvVars }}"
+        set +a
+        npm run ${{ parameters.typecheckScript }}
       displayName: 'Typecheck (astro check) — npm'
       condition: eq('${{ parameters.packageManager }}', 'npm')
 
-    - script: yarn ${{ parameters.typecheckScript }}
+    - script: |
+        set -a
+        while IFS='=' read -r key value; do
+          [ -z "$key" ] && continue
+          export "$key=$value"
+        done <<< "${{ parameters.buildEnvVars }}"
+        set +a
+        yarn ${{ parameters.typecheckScript }}
       displayName: 'Typecheck (astro check) — yarn'
       condition: eq('${{ parameters.packageManager }}', 'yarn')
 
@@ -111,11 +129,25 @@ jobs:
         displayName: 'Run tests — yarn'
         condition: eq('${{ parameters.packageManager }}', 'yarn')
 
-    - script: npm run ${{ parameters.buildScript }}
+    - script: |
+        set -a
+        while IFS='=' read -r key value; do
+          [ -z "$key" ] && continue
+          export "$key=$value"
+        done <<< "${{ parameters.buildEnvVars }}"
+        set +a
+        npm run ${{ parameters.buildScript }}
       displayName: 'Build (astro build) — npm'
       condition: eq('${{ parameters.packageManager }}', 'npm')
 
-    - script: yarn ${{ parameters.buildScript }}
+    - script: |
+        set -a
+        while IFS='=' read -r key value; do
+          [ -z "$key" ] && continue
+          export "$key=$value"
+        done <<< "${{ parameters.buildEnvVars }}"
+        set +a
+        yarn ${{ parameters.buildScript }}
       displayName: 'Build (astro build) — yarn'
       condition: eq('${{ parameters.packageManager }}', 'yarn')
 

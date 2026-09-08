@@ -36,8 +36,10 @@ def check_parameters_have_type(filepath, content):
         line_number += 1
         stripped = line.strip()
 
-        # Detect parameters block
-        if stripped == "parameters:" or re.match(r'^parameters:\s*$', stripped):
+        # Detect parameters block (top-level only, i.e. no leading whitespace —
+        # nested 'parameters:' blocks passed to template calls are indented
+        # and must not be mistaken for the file's own parameter declarations).
+        if (stripped == "parameters:" or re.match(r'^parameters:\s*$', stripped)) and not line[:1].isspace():
             in_parameters = True
             continue
 

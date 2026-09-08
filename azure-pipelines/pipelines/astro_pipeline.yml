@@ -67,6 +67,10 @@ parameters:
     displayName: Test script name
     type: string
     default: test
+  - name: buildEnvVars
+    displayName: Extra env vars for typecheck/build, one KEY=VALUE per line (e.g. a monorepo client selector)
+    type: string
+    default: ''
   - name: sonarKey
     type: string
     default: ''
@@ -126,6 +130,10 @@ parameters:
     displayName: Extra --set-string KEY=VALUE pairs, one per line (helm mode)
     type: string
     default: ''
+  - name: deployVariableGroup
+    displayName: Azure DevOps variable group to link into the Deploy stage (helm mode secrets, e.g. per-client SMTP creds). Leave empty to skip.
+    type: string
+    default: ''
   - name: enableSecurityChecks
     displayName: Enable security checks
     type: boolean
@@ -164,6 +172,7 @@ stages:
           testScript: ${{ parameters.testScript }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
+          buildEnvVars: ${{ parameters.buildEnvVars }}
 
   - ${{ if eq(parameters.enableSecurityChecks, true) }}:
     - stage: Security_Checks
@@ -204,8 +213,12 @@ stages:
       - Build_And_Typecheck
       - Docker_Build_And_Publish
     variables:
-      BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-      deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+      - name: BUILDID
+        value: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      - name: deployEnv
+        value: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+      - ${{ if ne(parameters.deployVariableGroup, '') }}:
+        - group: ${{ parameters.deployVariableGroup }}
     jobs:
       - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
         - template: /jobs/kube_deploy.yml

@@ -465,6 +465,89 @@ stages:
 
 ---
 
+## RestoTemplate (multi-client monorepo, CICD-20)
+
+Original pipeline: `client` parameter selects `clients/<slug>` to build and
+`helm/values/<slug>.yaml` to deploy; secrets come from a per-client
+`Resto-<slug>` variable group; release/namespace is `resto-<slug>`.
+
+Two real gaps, both closed by this ticket:
+1. `CLIENT=$(CLIENT)` was exported before every `npm run typecheck`/`npm run
+   build` call — no existing parameter threaded arbitrary env vars into the
+   Astro build job. Added `buildEnvVars` (multi-line `KEY=VALUE`, parsed the
+   same way `dockerBuildArgs`/`helmSetValues` already are) to both
+   `astro_pipeline.yml` and `jobs/astro/astro_build_test.yml`.
+2. The `Resto-<slug>` variable group was linked directly in the consumer
+   pipeline's `CD` stage `variables:` block — no template parameter existed
+   to link an arbitrary variable group into the `Deploy` stage. Added
+   `deployVariableGroup` (empty by default = unchanged behavior for every
+   other consumer).
+
+```yaml
+trigger:
+  branches:
+    include: [master]
+pr: none
+
+parameters:
+  - name: client
+    type: string
+    default: 'demo-woods'
+
+resources:
+  repositories:
+    - repository: templates
+      type: github
+      name: jstrullu/cicd-templates
+      endpoint: github-connection
+
+extends:
+  template: /azure-pipelines/pipelines/astro_pipeline.yml@templates
+  parameters:
+    appName: resto-${{ parameters.client }}
+    gitFlowType: trunk-based
+    versioningStrategy: git-sha
+    nodeVersion: '20.x'
+    packageManager: npm
+    typecheckScript: typecheck
+    buildScript: build
+    buildEnvVars: CLIENT=${{ parameters.client }}
+    dockerPushMode: insecure-cli
+    dockerImageName: resto-${{ parameters.client }}
+    insecureRegistryUrl: registry.internal:5000
+    deployMode: helm
+    helmChartPath: helm/resto-site
+    helmValuesFile: helm/values/${{ parameters.client }}.yaml
+    deployVariableGroup: Resto-${{ parameters.client }}
+    helmSetValues: |
+      secrets.smtpUser=$(SMTP_USER)
+      secrets.smtpPass=$(SMTP_PASS)
+```
+
+Two things this block deliberately does **not** attempt to reproduce:
+- The original's conditional `BASIC_AUTH_ARGS` (only set `--set-string
+  ingress.basicAuth.htpasswd=...` when the client has that secret defined).
+  `helmSetValues` is static text here — a client without
+  `BASIC_AUTH_HTPASSWD` in its variable group would pass an empty value.
+  Verify whether `helm_deploy.yml`'s `--set-string` with an empty RHS is a
+  no-op or sets an empty string before relying on this for a client that
+  needs the distinction.
+- `deploy: false` as a manual on/off switch for the CD stage — replaced by
+  `gitflow.shouldDeploy` (trunk-based: deploys every push to `master`),
+  which changes the trigger semantics slightly (no more per-run opt-out).
+  Acceptable trade-off if manual control isn't needed; otherwise a
+  `disableDeploy`-style override would need a small template change.
+
+**Real verification done**: `buildEnvVars`/`deployVariableGroup` YAML
+validates (`validate_templates.py`, 50/50), the bash env-var parsing logic
+was extracted and run standalone with the exact `CLIENT=demo-woods` value
+this project uses (single-line and multi-line-with-blank-line cases both
+resolved correctly). **Not yet verified**: an actual pipeline run against
+RestoTemplate's real Helm chart/cluster — do that before considering the
+migration complete, per the two caveats above.
+
+---
+
 ## Summary
 
 | Project | Stack template | Ready to migrate as shown? | Real gap found |
@@ -497,7 +580,7 @@ stacks. The remaining Azure DevOps projects, checked 2026-09-08:
 |---|---|---|
 | **Belote** | ❌ blocked — CICD-19 | Mobile Android + signed APK/AAB + Play Store publish via fastlane. No stack covers this (Flutter deploys to Firebase, not Play Store). |
 | **sc-app** | ❌ blocked — CICD-19 | Same mobile/Play Store gap as Belote, plus a pinned .NET 9 SDK (global.json) distinct from the root SDK 10 — needs its own parameter. Backend/API portion (`.NET` + Helm) already fits `dotnetcore_pipeline.yml` as-is; only the mobile job is blocked. |
-| **RestoTemplate** | ⚠️ blocked pending a prototype — CICD-20 | Multi-client monorepo, one parameterized pipeline builds/deploys one client (`clients/<slug>`) at a time. Might already work with existing `astro_pipeline.yml` parameters (appName, helmValuesFile) resolved client-side in the consumer pipeline's `variables:` block — not yet tested for real. See CICD-20: prototype before coding any template change. |
+| **RestoTemplate** | ✅ migratable — CICD-20 delivered | Multi-client monorepo. `astro_pipeline.yml` now supports it via `buildEnvVars` (injects `CLIENT=<slug>` before typecheck/build) and `deployVariableGroup` (links the per-client `Resto-<slug>` variable group into the Deploy stage). See full block below. |
 | **Infrastructure** | ❌ out of scope, not a migration candidate | Pure infra-as-code (Helm/kubectl only, no application to build/test, no Docker image, `git diff`-based change detection driving per-component conditional stages, manual-approval gates on cluster-critical components). This is a fundamentally different pipeline shape than "build → test → push → deploy one app" — cicd-templates was never designed for it and extending it to fit would dilute what the 9 stacks actually do well. Not tracked as a CICD ticket; keep Infrastructure's bespoke pipeline as-is. |
 | **PentestSaaS** | 🟡 on standby | User decision 2026-09-08: put aside for now, alongside QualiForma. Build/test/Docker fits `dotnetcore_pipeline.yml` as-is; deploy fits `deployMode: helm`. Only real gap was a CI frontend job with no template equivalent — not a blocker, revisit when standby lifts. |
 | **QualiForma** | 🟡 on standby — CICD-18 | User decision 2026-09-08: put aside for now, alongside PentestSaaS. CICD-18 still tracks the real technical gap (no Helm chart) for when standby lifts, downgraded to Low priority, labeled `en-standby`. |
