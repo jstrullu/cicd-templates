@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- declare missing projectFile parameter in finalisation template
 - resolve Azure Pipelines template refs from repo root
 
 
