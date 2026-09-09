@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- point npm/yarn install cache to Pipeline.Workspace to match Cache@2 path
 - query PR title via System.AccessToken instead of restCallBuildTask
 - skip npm version for non-semver project versions
 - replace shellexec/JsonPatch marketplace tasks with plain bash step
