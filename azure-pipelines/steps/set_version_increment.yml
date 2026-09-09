@@ -1,62 +1,37 @@
-# Takes the versionIncrement variable as parameter
+# Resolves the version increment, honoring a "#VERSION major|minor|patch"
+# override in the merged pull request title. Uses System.AccessToken against
+# the Azure DevOps REST API directly: no service connection, no marketplace
+# tasks. Falls back to the default increment when no PR or no override exists.
 parameters:
   - name: versionIncrement
     type: string
-  - name: reposConnection
-    type: string
-    default: Repos
 
 steps:
-  - script: |
-      echo $(System.TeamProject)/_apis/git/repositories/$(Build.Repository.Name)/pullrequestquery?api-version=3.0
-  - task: restCallBuildTask@0
-    displayName: 'Getting pullrequest with API'
-    continueOnError: true
-    inputs:
-      webserviceEndpoint: '${{ parameters.reposConnection }}'
-      relativeUrl: '$(System.TeamProject)/_apis/git/repositories/$(Build.Repository.Name)/pullrequestquery?api-version=3.0'
-      httpVerb: 'POST'
-      body: |
-        {
-        "queries" : [{"type":"lastMergeCommit", "items":["$(Build.SourceVersion)"]}]
-        }
-      contentType: 'application/json'
-      saveResponseToFile: true
-      outputFilePath: 'pullRequest.json'
-      allowInvalidSSLCertificate: false
-  - task: LoadJsonVariables@2
-    displayName: 'Reading pullrequest'
-    continueOnError: true
-    inputs:
-      JsonSource: 'pullRequest.json'
-      VariablePrefix: 'pullRequest'
-      MarkAsSecret: false
-  - bash: echo '##vso[task.setvariable variable=versionIncrement;]${{ parameters.versionIncrement }}'
-    displayName: 'Bump init'
-  - bash: echo '##vso[task.setvariable variable=pullRequestTitle;]$(pullRequest_results_0_$(Build.SourceVersion)_0_title)'
-    displayName: 'Getting pullrequest title'
-  - task: shellexec@0
-    displayName: 'Cleaning title'
-    inputs:
-      code: |
-        #! /bin/bash
-        pullRequestTitle="$(pullRequestTitle)"
-        pullRequestTitleWithoutQuotes="$(tr -d "\"\`'" <<<$pullRequestTitle)"
-        echo "##vso[task.setvariable variable=pullRequestTitle;]$pullRequestTitleWithoutQuotes"
-  - task: CmdLine@1
-    displayName: 'Looking for bump in title'
-    inputs:
-      filename: sh
-      arguments: '-c "echo \"##vso[task.setvariable variable=versionSplit;]$(node -p ''\"$(pullRequestTitle)\".toUpperCase().split(\"#VERSION\")[1]'')\"'
-  - task: CmdLine@1
-    displayName: 'Parsing title for bump level'
-    inputs:
-      filename: sh
-      arguments: '-c "echo \"##vso[task.setvariable variable=versionIncrementFromPR;]$(node -p ''\"$(versionSplit)\".split(\" \")[0]'')\"'
-    condition: and(succeeded(), ne(variables['versionSplit'], 'undefined'))
-  - task: CmdLine@1
-    displayName: 'Setting bump from pullrequest title'
-    inputs:
-      filename: sh
-      arguments: '-c "echo \"##vso[task.setvariable variable=versionIncrement;]$(node -p ''\"$(versionIncrementFromPR)\".toLowerCase()'')\"'
-    condition: and(succeeded(), ne(variables['versionIncrementFromPR'], variables['noSuch']))
+  - bash: |
+      INCREMENT='${{ parameters.versionIncrement }}'
+      echo "##vso[task.setvariable variable=versionIncrement;]$INCREMENT"
+      echo "##vso[task.setvariable variable=versionIncrementFromPR;]"
+      RESP=$(curl -sf -u ":$SYSTEM_ACCESSTOKEN" -H "Content-Type: application/json" -X POST \
+        -d '{"queries":[{"type":"lastMergeCommit","items":["'"$BUILD_SOURCEVERSION"'"]}]}' \
+        "${SYSTEM_COLLECTIONURI}${SYSTEM_TEAMPROJECT}/_apis/git/repositories/${BUILD_REPOSITORY_ID}/pullrequestquery?api-version=7.1") \
+        || { echo "PR query failed; using default increment '$INCREMENT'"; exit 0; }
+      TITLE=$(echo "$RESP" | jq -r --arg sha "$BUILD_SOURCEVERSION" '.results[0][$sha][0].title // empty' 2>/dev/null)
+      if [ -z "$TITLE" ]; then
+        echo "No pull request found for $BUILD_SOURCEVERSION; using default increment '$INCREMENT'"
+        exit 0
+      fi
+      echo "Pull request title: $TITLE"
+      BUMP=$(echo "$TITLE" | tr '[:lower:]' '[:upper:]' | sed -n 's/.*#VERSION[[:space:]]*\([A-Z]*\).*/\1/p' | tr '[:upper:]' '[:lower:]')
+      case "$BUMP" in
+        major|minor|patch)
+          echo "PR title override: $BUMP"
+          echo "##vso[task.setvariable variable=versionIncrement;]$BUMP"
+          echo "##vso[task.setvariable variable=versionIncrementFromPR;]$BUMP"
+          ;;
+        *)
+          echo "No #VERSION override in PR title; using default increment '$INCREMENT'"
+          ;;
+      esac
+    displayName: 'Resolve version increment (PR title #VERSION override)'
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
