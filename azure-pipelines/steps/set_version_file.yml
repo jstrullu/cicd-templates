@@ -4,22 +4,12 @@ parameters:
   - name: releaseVersion
     type: string
 
-
-
 steps:
-  - task: shellexec@0
-    displayName: Create file ${{ parameters.jsonFile }} if it does not exist
-    inputs:
-      code: |
-        test -f "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}" || echo "{\"version\": \"0.0.0\"}" > "$(Build.SourcesDirectory)/${{ parameters.jsonFile }}"
-        git add ${{ parameters.jsonFile }}
-
-  - task: JsonPatch@4
-    displayName: Update file ${{ parameters.jsonFile }}
-    inputs:
-      SyntaxType: 'slick'
-      JsonWorkingDir: '$(Build.SourcesDirectory)'
-      JsonTargetFilters: '${{ parameters.jsonFile }}'
-      JsonPatchContent: '= /version => "${{ parameters.releaseVersion}}"'
-      OutputPatchFile: true
-      TreatErrors: 'ERROR'
+  - bash: |
+      cd "$(Build.SourcesDirectory)"
+      test -f "${{ parameters.jsonFile }}" || echo '{"version": "0.0.0"}' > "${{ parameters.jsonFile }}"
+      # ponytail: sed on controlled version file ({"version": "..."}); switch to jq if the file grows structure
+      sed -i 's/"version": *"[^"]*"/"version": "${{ parameters.releaseVersion }}"/' "${{ parameters.jsonFile }}"
+      git add "${{ parameters.jsonFile }}"
+      cat "${{ parameters.jsonFile }}"
+    displayName: Set version ${{ parameters.releaseVersion }} in ${{ parameters.jsonFile }}
