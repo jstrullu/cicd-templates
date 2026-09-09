@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- query PR title via System.AccessToken instead of restCallBuildTask
 - skip npm version for non-semver project versions
 - replace shellexec/JsonPatch marketplace tasks with plain bash step
 - declare missing projectFile parameter in finalisation template
