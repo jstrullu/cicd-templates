@@ -115,7 +115,7 @@ parameters:
 stages:
   - stage: Initialization
     jobs:
-      - template: /jobs/json_semantic_version.yml
+      - template: /azure-pipelines/jobs/json_semantic_version.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           jsonFile: ${{ parameters.jsonFile }}
@@ -130,13 +130,13 @@ stages:
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
-      - template: /jobs/angular/angular_test_and_build.yml
+      - template: /azure-pipelines/jobs/angular/angular_test_and_build.yml
         parameters:
           sonarKey: ${{ parameters.sonarKey }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
       - ${{ if eq(parameters.enableMutationTesting, true) }}:
-        - template: /jobs/angular/angular_mutation_test.yml
+        - template: /azure-pipelines/jobs/angular/angular_mutation_test.yml
           parameters:
             projectVersion: $(version)
             jsonFile: ${{ parameters.jsonFile }}
@@ -148,7 +148,7 @@ stages:
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
-      - template: /jobs/angular/angular_linter.yml
+      - template: /azure-pipelines/jobs/angular/angular_linter.yml
         parameters:
           projectVersion: $(version)
 
@@ -156,7 +156,7 @@ stages:
     - stage: Security_Checks
       dependsOn: Initialization
       jobs:
-        - template: /jobs/angular/security_checks.yml
+        - template: /azure-pipelines/jobs/angular/security_checks.yml
           parameters:
             targetFile: ${{ parameters.securityTargetFile }}
 
@@ -170,13 +170,13 @@ stages:
       - Lint
     jobs:
       - ${{ if eq(parameters.dockerPushMode, 'service-connection') }}:
-        - template: /jobs/docker_build_and_publish.yml
+        - template: /azure-pipelines/jobs/docker_build_and_publish.yml
           parameters:
             registry: ${{ parameters.dockerRegistry }}
             containerRegistry: ${{ parameters.containerRegistry }}
             projectVersion: $(version)
       - ${{ if eq(parameters.dockerPushMode, 'insecure-cli') }}:
-        - template: /jobs/docker_build_push_insecure.yml
+        - template: /azure-pipelines/jobs/docker_build_push_insecure.yml
           parameters:
             registry: ${{ parameters.dockerRegistry }}
             imageName: ${{ coalesce(parameters.dockerImageName, parameters.appName) }}
@@ -197,13 +197,13 @@ stages:
       deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
     jobs:
       - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
-        - template: /jobs/kube_deploy.yml
+        - template: /azure-pipelines/jobs/kube_deploy.yml
           parameters:
             env: $(deployEnv)
             resource: ${{ parameters.appName }}
             namespace: ${{ parameters.appName }}
       - ${{ if eq(parameters.deployMode, 'helm') }}:
-        - template: /jobs/helm_deploy.yml
+        - template: /azure-pipelines/jobs/helm_deploy.yml
           parameters:
             releaseName: ${{ parameters.appName }}
             namespace: ${{ parameters.appName }}
@@ -224,7 +224,7 @@ stages:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
       shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
     jobs:
-      - template: /jobs/finalisation.yml
+      - template: /azure-pipelines/jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}

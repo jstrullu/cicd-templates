@@ -19,7 +19,7 @@ jobs:
     - checkout: self
       clean: true
       persistCredentials: true
-    - template: ..\..\steps\set_version_file.yml
+    - template: ../../steps/set_version_file.yml
       parameters:
         jsonFile: ${{parameters.jsonFile}}
         releaseVersion: ${{parameters.projectVersion}}

@@ -167,7 +167,7 @@ stages:
         - name: ANDROID_SDK_HOME
           value: $(Agent.HomeDirectory)/.cache/${{ parameters.appName }}/android-sdk
       jobs:
-        - template: /jobs/dotnet_maui/android_release_build.yml
+        - template: /azure-pipelines/jobs/dotnet_maui/android_release_build.yml
           parameters:
             csprojPath: ${{ parameters.csprojPath }}
             dotnetSdkVersion: ${{ parameters.dotnetSdkVersion }}
@@ -200,7 +200,7 @@ stages:
       - name: ANDROID_SDK_HOME
         value: $(Agent.HomeDirectory)/.cache/${{ parameters.appName }}/android-sdk
     jobs:
-      - template: /jobs/dotnet_maui/android_release_build.yml
+      - template: /azure-pipelines/jobs/dotnet_maui/android_release_build.yml
         parameters:
           csprojPath: ${{ parameters.csprojPath }}
           dotnetSdkVersion: ${{ parameters.dotnetSdkVersion }}

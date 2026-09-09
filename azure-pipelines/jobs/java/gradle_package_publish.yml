@@ -15,7 +15,7 @@ jobs:
       - download: current
         artifact: drop
       - bash: cp -rf $(Pipeline.Workspace)/drop/* ./
-      - template: ..\..\steps\set_version_file.yml
+      - template: ../../steps/set_version_file.yml
         parameters:
           jsonFile: ${{parameters.jsonFile}}
           releaseVersion: ${{parameters.projectVersion}}

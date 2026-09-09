@@ -56,7 +56,7 @@ parameters:
 stages:
   - stage: Initialization
     jobs:
-      - template: /jobs/json_semantic_version.yml
+      - template: /azure-pipelines/jobs/json_semantic_version.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
           jsonFile: ${{ parameters.jsonFile }}
@@ -69,7 +69,7 @@ stages:
     - stage: Security_Checks
       dependsOn: Initialization
       jobs:
-        - template: /jobs/java/security_checks.yml
+        - template: /azure-pipelines/jobs/java/security_checks.yml
           parameters:
             targetFile: ${{ parameters.securityTargetFile }}
 
@@ -78,7 +78,7 @@ stages:
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
-      - template: /jobs/java/java_gradle_avro_build.yml
+      - template: /azure-pipelines/jobs/java/java_gradle_avro_build.yml
         parameters:
           javaVersion: ${{ parameters.javaVersion }}
           projectVersion: $(version)
@@ -90,7 +90,7 @@ stages:
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
     jobs:
-      - template: /jobs/java/gradle_package_publish.yml
+      - template: /azure-pipelines/jobs/java/gradle_package_publish.yml
         parameters:
           javaVersion: ${{ parameters.javaVersion }}
           projectVersion: $(version)
@@ -105,7 +105,7 @@ stages:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
       shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]
     jobs:
-      - template: /jobs/finalisation.yml
+      - template: /azure-pipelines/jobs/finalisation.yml
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}

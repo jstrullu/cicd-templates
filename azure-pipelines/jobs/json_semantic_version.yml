@@ -52,7 +52,7 @@ jobs:
     - checkout: self
       clean: true
       persistCredentials: true
-    - template: ..\steps\resolve_gitflow_context.yml
+    - template: ../steps/resolve_gitflow_context.yml
       parameters:
         gitFlowType: ${{ parameters.gitFlowType }}
         defaultIncrement: ${{ parameters.versionIncrement }}
@@ -89,7 +89,7 @@ jobs:
         name: semantic
 
     - ${{ if eq(parameters.versioningStrategy, 'semver') }}:
-      - template: ..\steps\set_version_increment.yml
+      - template: ../steps/set_version_increment.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
       # Apply git flow branch-specific increment when PR title did not override

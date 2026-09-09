@@ -28,7 +28,7 @@ jobs:
     steps:
       - checkout: self
         persistCredentials: true
-      - template: ..\..\steps\resolve_gitflow_context.yml
+      - template: ../../steps/resolve_gitflow_context.yml
         parameters:
           gitFlowType: ${{ parameters.gitFlowType }}
           defaultIncrement: ${{ parameters.versionIncrement }}
@@ -40,7 +40,7 @@ jobs:
         inputs:
           mode: 'auto'
           channel: 'stable'
-      - template: ..\..\steps\set_version_increment.yml
+      - template: ../../steps/set_version_increment.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
       - task: shellexec@0

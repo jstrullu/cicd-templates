@@ -138,7 +138,7 @@ jobs:
             packageType: sdk
             version: '${{ parameters.dotnetSdkVersion }}'
 
-      - template: /steps/android_bootstrap.yml
+      - template: /azure-pipelines/steps/android_bootstrap.yml
         parameters:
           jdkHome: ${{ parameters.jdkHome }}
           jdkVersion: ${{ parameters.jdkVersion }}
