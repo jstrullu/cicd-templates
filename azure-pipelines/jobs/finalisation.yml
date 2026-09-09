@@ -5,6 +5,9 @@ parameters:
     type: string
   - name: language
     type: string
+  - name: projectFile
+    type: string
+    default: ''
   - name: shouldTag
     type: string
     default: 'true'

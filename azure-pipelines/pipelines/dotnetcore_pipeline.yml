@@ -331,5 +331,6 @@ stages:
         parameters:
           releaseVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
+          projectFile: ${{ parameters.projectFile }}
           language: '.net'
           shouldTag: $(shouldTag)
