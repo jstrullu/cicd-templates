@@ -76,10 +76,14 @@ jobs:
     - script: npm ci
       displayName: 'Install dependencies (npm)'
       condition: eq('${{ parameters.packageManager }}', 'npm')
+      env:
+        npm_config_cache: '$(Pipeline.Workspace)/.npm'
 
     - script: yarn install --frozen-lockfile
       displayName: 'Install dependencies (yarn)'
       condition: eq('${{ parameters.packageManager }}', 'yarn')
+      env:
+        YARN_CACHE_FOLDER: '$(Pipeline.Workspace)/.yarn'
 
     - script: |
         v='${{ parameters.projectVersion }}'
