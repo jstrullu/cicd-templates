@@ -82,7 +82,12 @@ jobs:
       condition: eq('${{ parameters.packageManager }}', 'yarn')
 
     - script: |
-        npm version ${{ parameters.projectVersion }} --no-git-tag-version
+        v='${{ parameters.projectVersion }}'
+        if echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+          npm version "$v" --no-git-tag-version
+        else
+          echo "Version '$v' is not semver (git-sha strategy); leaving package.json unchanged"
+        fi
       displayName: 'Set package version'
 
     - ${{ if ne(parameters.sonarKey, '') }}:

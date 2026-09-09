@@ -36,8 +36,13 @@ jobs:
         condition: or(eq('${{parameters.language}}', 'angular'), eq('${{parameters.language}}', 'node'))
 
       - script: |
-          npm ci
-          npm version ${{ parameters.releaseVersion }} --no-git-tag-version
+          v='${{ parameters.releaseVersion }}'
+          if echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            npm ci
+            npm version "$v" --no-git-tag-version
+          else
+            echo "Version '$v' is not semver (git-sha strategy); leaving package.json unchanged"
+          fi
         displayName: 'Update Node/Angular version'
         condition: or(eq('${{parameters.language}}', 'angular'), eq('${{parameters.language}}', 'node'))
 
