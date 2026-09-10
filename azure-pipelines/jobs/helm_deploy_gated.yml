@@ -55,6 +55,8 @@ jobs:
   - deployment: helm_deploy_gated
     displayName: 'Helm deploy to ${{ parameters.namespace }} (awaits approval)'
     timeoutInMinutes: 20
+    pool:
+      name: Self-Hosted-K3s
     environment: ${{ parameters.approvalEnvironment }}
     strategy:
       runOnce:

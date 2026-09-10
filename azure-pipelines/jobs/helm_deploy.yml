@@ -71,6 +71,8 @@ jobs:
   - job: helm_deploy
     displayName: 'Helm deploy to ${{ parameters.namespace }}'
     timeoutInMinutes: 20
+    pool:
+      name: Self-Hosted-K3s
     steps:
       - checkout: self
         clean: true
