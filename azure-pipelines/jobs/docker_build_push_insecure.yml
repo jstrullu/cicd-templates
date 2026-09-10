@@ -36,6 +36,8 @@ parameters:
 jobs:
   - job: build_and_push_image
     timeoutInMinutes: 30
+    pool:
+      name: Self-Hosted-K3s
     variables:
       image: '${{ parameters.registry }}/${{ parameters.imageName }}'
     steps:
