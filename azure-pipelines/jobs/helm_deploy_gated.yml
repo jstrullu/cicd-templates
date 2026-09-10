@@ -1,4 +1,8 @@
 parameters:
+  - name: poolName
+    displayName: Agent pool name (needs kubectl/helm context and network access to the cluster)
+    type: string
+    default: 'Self-Hosted-K3s'
   - name: releaseName
     type: string
   - name: namespace
@@ -56,7 +60,7 @@ jobs:
     displayName: 'Helm deploy to ${{ parameters.namespace }} (awaits approval)'
     timeoutInMinutes: 20
     pool:
-      name: Self-Hosted-K3s
+      name: ${{ parameters.poolName }}
     environment: ${{ parameters.approvalEnvironment }}
     strategy:
       runOnce:

@@ -1,4 +1,8 @@
 parameters:
+  - name: poolName
+    displayName: Agent pool name (needs network access to the registry)
+    type: string
+    default: 'Self-Hosted-K3s'
   - name: registry
     displayName: Registry host (e.g. registry.internal:5000 or ghcr.io/org)
     type: string
@@ -37,7 +41,7 @@ jobs:
   - job: build_and_push_image
     timeoutInMinutes: 30
     pool:
-      name: Self-Hosted-K3s
+      name: ${{ parameters.poolName }}
     variables:
       image: '${{ parameters.registry }}/${{ parameters.imageName }}'
     steps:
