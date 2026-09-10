@@ -51,6 +51,14 @@ parameters:
     type: string
   - name: containerRegistry
     type: string
+  # Links an Azure DevOps variable group into the Docker_Build_And_Publish
+  # stage — needed when a --build-arg references a secret (e.g. an API key
+  # baked into a frontend bundle at build time). Empty by default: zero
+  # behavior change for every existing consumer.
+  - name: dockerBuildVariableGroup
+    displayName: Variable group to link into the Docker build stage (secrets referenced by dockerBuildArgs/dockerImages[].buildArgs). Leave empty to skip.
+    type: string
+    default: ''
   # service-connection (default): Docker@2 task, needs an Azure DevOps
   #   containerRegistry service connection — unchanged behavior.
   # insecure-cli: docker build/push CLI direct against an in-cluster/self-hosted
@@ -109,6 +117,10 @@ parameters:
     default: ''
   - name: helmSetValues
     displayName: Extra --set-string KEY=VALUE pairs, one per line (helm mode)
+    type: string
+    default: ''
+  - name: deployVariableGroup
+    displayName: Variable group to link into the (mono) Deploy stage (secrets referenced by helmSetValues). Leave empty to skip.
     type: string
     default: ''
   # Sandbox -> Prod, same image tag reused between the two, gated by manual
@@ -205,7 +217,10 @@ stages:
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      - name: version
+        value: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      - ${{ if ne(parameters.dockerBuildVariableGroup, '') }}:
+        - group: ${{ parameters.dockerBuildVariableGroup }}
     dependsOn:
       - Initialization
       - BuildAndTest
@@ -243,8 +258,12 @@ stages:
         - BuildAndTest
         - Docker_Build_And_Publish
       variables:
-        BUILDID: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-        deployEnv: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+        - name: BUILDID
+          value: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+        - name: deployEnv
+          value: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+        - ${{ if ne(parameters.deployVariableGroup, '') }}:
+          - group: ${{ parameters.deployVariableGroup }}
       jobs:
         - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
           - template: /azure-pipelines/jobs/kube_deploy.yml
