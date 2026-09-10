@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- parameterize agent pool name for docker/helm jobs
+
 ### Fixed
 - run helm_deploy jobs on Self-Hosted-K3s pool
 - fixing pool for registry
