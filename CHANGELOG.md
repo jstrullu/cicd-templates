@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- run helm_deploy jobs on Self-Hosted-K3s pool
 - fixing pool for registry
 - point npm/yarn install cache to Pipeline.Workspace to match Cache@2 path
 - query PR title via System.AccessToken instead of restCallBuildTask
