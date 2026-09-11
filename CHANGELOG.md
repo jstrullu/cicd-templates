@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- CICD-21: semantic versioning + finalization for the GitLab .NET stack
 - CICD-5: extract reusable GitLab CI template for .NET build+test
 - CICD-3/4: dotnet build + dotnet test jobs on GitLab CI
 - CICD-2: hello GitLab - minimal 1-stage/1-job pipeline
