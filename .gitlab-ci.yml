@@ -3,9 +3,15 @@
 # mis en dernier sur Belote : ne pas cumuler "apprendre le provider" et
 # "porter la stack" dans le même ticket).
 #
-# Fini = ce pipeline s'exécute réellement sur un runner GitLab et affiche
-# sa sortie. Aucune notion .NET, aucun template réutilisable ici — ça
-# viendra dans les tickets suivants (CICD-3/4/5).
+# CICD-3/4/5 : le build+test .NET a été extrait en template réutilisable
+# (gitlab-ci/dotnet_pipeline.yml) — ce fichier racine le consomme via
+# include local, pour se prouver soi-même que le mécanisme include/inputs
+# fonctionne avant qu'un autre projet ne le fasse en cross-repo.
+
+include:
+  - local: 'gitlab-ci/dotnet_pipeline.yml'
+    inputs:
+      dotnetSdkVersion: '10.0'
 
 stages:
   - hello
@@ -17,37 +23,3 @@ hello_world:
   image: alpine:3
   script:
     - echo "Hello GitLab — cicd-templates CICD-2"
-
-# CICD-3 — build .NET (dotnet build, image SDK Microsoft officielle).
-# Tagué sur le SDK 10 (dernière LTS-ish disponible en local à ce jour) ;
-# ce tag devra rester un paramètre quand ce sera extrait en template
-# réutilisable (CICD-5), le SDK d'un consommateur réel n'est pas figé.
-dotnet_build:
-  stage: build
-  image: mcr.microsoft.com/dotnet/sdk:10.0
-  script:
-    - dotnet restore
-    - dotnet build --configuration Release --no-restore
-  artifacts:
-    paths:
-      - "**/bin/Release/"
-    expire_in: 1 hour
-
-# CICD-4 — test .NET (dotnet test), à la suite du build. Pas de
-# couverture/rapports élaborés ici par contrat (CICD-1) : raffinement
-# ultérieur, une fois le socle build+test prouvé sur un runner réel.
-dotnet_test:
-  stage: test
-  image: mcr.microsoft.com/dotnet/sdk:10.0
-  needs:
-    - dotnet_build
-  script:
-    - dotnet test --configuration Release --no-restore --logger "trx;LogFileName=TEST.xml"
-  artifacts:
-    when: always
-    paths:
-      - "**/TestResults/TEST.xml"
-    reports:
-      junit:
-        - "**/TestResults/TEST.xml"
-    expire_in: 1 week

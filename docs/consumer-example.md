@@ -314,6 +314,24 @@ stages:
 
 ---
 
+## GitLab CI Example
+
+**Status: early / structurally verified only, not yet run against a real GitLab runner** (no GitLab account/runner available at the time of writing — see CICD-2 through CICD-5). .NET build + test only; Docker, deploy, and versioning are separate future tickets, not covered here.
+
+```yaml
+# .gitlab-ci.yml
+include:
+  - project: 'jstrullu/cicd-templates'
+    ref: main
+    file: 'gitlab-ci/dotnet_pipeline.yml'
+    inputs:
+      dotnetSdkVersion: '10.0'   # optional, defaults to '10.0'
+
+stages:
+  - build
+  - test
+```
+
 ## GitHub Actions Examples
 
 Copy a workflow template from `github-actions/workflow-templates/` into your `.github/workflows/` directory and edit the `env` section.

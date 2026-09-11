@@ -1,0 +1,55 @@
+spec:
+  inputs:
+    dotnetSdkVersion:
+      description: 'Tag GitLab Container Registry-compatible du SDK .NET (mcr.microsoft.com/dotnet/sdk:<tag>)'
+      type: string
+      default: '10.0'
+---
+# Template GitLab CI réutilisable — build + test .NET (CICD-5).
+#
+# Portage GitLab de la brique dotnetcore existante en Azure Pipelines /
+# GitHub Actions : build (dotnet build) + test (dotnet test), rien de
+# plus, par contrat (CICD-1). Docker/deploy/versioning restent hors
+# scope — versions dédiées à venir, une capacité à la fois.
+#
+# Usage depuis un autre projet GitLab (dans son propre .gitlab-ci.yml) :
+#
+#   include:
+#     - project: 'jstrullu/cicd-templates'
+#       ref: main
+#       file: 'gitlab-ci/dotnet_pipeline.yml'
+#       inputs:
+#         dotnetSdkVersion: '10.0'   # optionnel, défaut '10.0'
+#
+# Voir docs/consumer-example.md (section GitLab) pour un exemple complet.
+
+stages:
+  - build
+  - test
+
+dotnet_build:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:$[[ inputs.dotnetSdkVersion ]]
+  script:
+    - dotnet restore
+    - dotnet build --configuration Release --no-restore
+  artifacts:
+    paths:
+      - "**/bin/Release/"
+    expire_in: 1 hour
+
+dotnet_test:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:$[[ inputs.dotnetSdkVersion ]]
+  needs:
+    - dotnet_build
+  script:
+    - dotnet test --configuration Release --no-restore --logger "trx;LogFileName=TEST.xml"
+  artifacts:
+    when: always
+    paths:
+      - "**/TestResults/TEST.xml"
+    reports:
+      junit:
+        - "**/TestResults/TEST.xml"
+    expire_in: 1 week
