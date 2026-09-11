@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CICD-2: hello GitLab - minimal 1-stage/1-job pipeline
 
 ### Fixed
+- GitLab consumer example used include:project, wrong for a GitHub-hosted repo
 - link variable groups into Docker build/deploy stages
 
 
