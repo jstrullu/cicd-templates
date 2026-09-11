@@ -316,7 +316,7 @@ stages:
 
 ## GitLab CI Example
 
-**Status: early / structurally verified only, not yet run against a real GitLab runner** (no GitLab account/runner available at the time of writing — see CICD-2 through CICD-5). .NET build + test only; Docker, deploy, and versioning are separate future tickets, not covered here.
+**Status: early / structurally verified only, not yet run against a real GitLab runner** (no GitLab account/runner available at the time of writing — see CICD-2 through CICD-5, and CICD-21 for versioning). .NET build + test + versioning/finalization only; Docker and deploy remain separate future tickets.
 
 `cicd-templates` lives on **GitHub**, not on a GitLab instance, so `include:project:` (same-instance only) does not apply here. Use `include:remote:` against the raw GitHub URL instead — it supports `inputs:` exactly like `project:` does:
 
@@ -326,11 +326,35 @@ include:
   - remote: 'https://raw.githubusercontent.com/jstrullu/cicd-templates/master/gitlab-ci/dotnet_pipeline.yml'
     inputs:
       dotnetSdkVersion: '10.0'   # optional, defaults to '10.0'
+  - remote: 'https://raw.githubusercontent.com/jstrullu/cicd-templates/master/gitlab-ci/dotnet_versioning.yml'
+    inputs:
+      versioningStrategy: 'semver'   # or 'git-sha' — optional, defaults to 'semver'
+      versionIncrement: 'patch'      # optional, defaults to 'patch'
+  - remote: 'https://raw.githubusercontent.com/jstrullu/cicd-templates/master/gitlab-ci/dotnet_finalization.yml'
+    inputs:
+      projectFile: 'src/MyApp/MyApp.csproj'   # optional, updates AssemblyVersion when set
 
 stages:
+  - versioning
   - build
   - test
+  - finalization
+
+# dotnet_build/dotnet_test need the version produced by the versioning
+# job (RELEASE_VERSION, exposed via a dotenv artifact) if you want to
+# stamp it anywhere during build — otherwise no wiring is required,
+# GitLab resolves the dotenv report automatically for any job with
+# `needs: [versioning]`.
+dotnet_build:
+  needs: [versioning]
+
+finalization:
+  needs: [versioning, dotnet_test]
 ```
+
+Pushing the version-bump commit/tag from a GitLab CI job requires **Settings > CI/CD > Job token permissions > "Allow Git push requests to the repository"** on the consumer project (off by default) — same nature of manual, per-project setup as the Azure DevOps "Contribute" permission needed for AEAGestion. If the target branch is protected, also allow Developers+Maintainers to push under Settings > Repository > Protected branches, or use a dedicated Project Access Token instead of `CI_JOB_TOKEN`.
+
+In `git-sha` strategy, `dotnet_finalization` still runs but produces no meaningful version-file change (nothing to commit) — the job is safe to include either way, but consider skipping it via `rules:` when using `git-sha` to avoid empty CI noise.
 
 If cicd-templates is ever mirrored onto the same GitLab instance as the consumer (self-hosted GitLab, once available), `include:project:` becomes the better option — it resolves by ref/branch server-side instead of pinning a raw URL.
 

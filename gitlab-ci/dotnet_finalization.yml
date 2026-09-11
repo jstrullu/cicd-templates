@@ -1,0 +1,72 @@
+spec:
+  inputs:
+    jsonFile:
+      description: 'Nom du fichier JSON de version'
+      type: string
+      default: 'cicd.json'
+    projectFile:
+      description: 'Chemin du fichier .csproj à mettre à jour (AssemblyVersion)'
+      type: string
+      default: ''
+    gitUserEmail:
+      type: string
+      default: 'ci-service@example.com'
+    gitUserName:
+      type: string
+      default: 'CI Service'
+---
+# Portage GitLab du module de finalisation existant sur Azure Pipelines
+# (jobs/finalisation.yml) et GitHub Actions (actions/finalisation) —
+# scope .NET uniquement ici (AssemblyVersion dans le .csproj), comme le
+# reste de ce template GitLab (CICD-1 : une stack à la fois).
+#
+# Attendu : RELEASE_VERSION et DOCKER_TAG disponibles via le dotenv
+# artifact du stage versioning (dotnet_versioning.yml), donc ce job a
+# besoin d'un `needs:` sur le job "versioning" dans le pipeline
+# consommateur pour recevoir ces variables.
+#
+# En stratégie git-sha, RELEASE_VERSION est un SHA court — pas de commit/
+# tag/push de version dans ce cas (comme les 2 autres providers), pour
+# ne pas polluer l'historique avec un commit qui ne change rien de
+# versionné. Ce job doit donc être skip côté consommateur (rule/if) en
+# git-sha ; il ne fait pas ce choix lui-même (pas d'accès à
+# versioningStrategy sans le repropager en input ici aussi).
+#
+# Pousser depuis un job GitLab CI n'est PAS activé par défaut — c'est
+# l'équivalent GitLab de la permission Git "Contribute" manquante
+# rencontrée sur Azure DevOps (AEAGestion) : un réglage projet à
+# activer manuellement, pas une limite du template.
+# Réglage requis : Settings > CI/CD > Job token permissions > "Allow
+# Git push requests to the repository" (décoché par défaut). Une fois
+# activé, CI_JOB_TOKEN (variable prédéfinie, pas de secret à créer)
+# suffit pour pousser sur une branche non protégée. Si la branche cible
+# est protégée, il faut en plus l'autoriser dans Settings > Repository
+# > Protected branches (Allowed to push : Developers + Maintainers), ou
+# utiliser un Project Access Token dédié à la place de CI_JOB_TOKEN.
+
+stages:
+  - finalization
+
+finalization:
+  stage: finalization
+  image: alpine/git:2.45.2
+  script:
+    - |
+      PROJECT_FILE="$[[ inputs.projectFile ]]"
+      if [ -n "$PROJECT_FILE" ] && [ -f "$PROJECT_FILE" ]; then
+        sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${RELEASE_VERSION}</AssemblyVersion>|g" "$PROJECT_FILE"
+      fi
+      JSON_FILE="$[[ inputs.jsonFile ]]"
+      test -f "$JSON_FILE" || echo '{"version": "0.0.0"}' > "$JSON_FILE"
+      sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"${RELEASE_VERSION}\"/" "$JSON_FILE"
+
+      git config --global user.email "$[[ inputs.gitUserEmail ]]"
+      git config --global user.name "$[[ inputs.gitUserName ]]"
+      git add -A
+      git commit -m "[skip ci] Set release version to ${RELEASE_VERSION}"
+      git tag -fa "${CI_COMMIT_REF_NAME}-${RELEASE_VERSION}" -m "${RELEASE_VERSION}"
+      git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_REF_NAME}" --follow-tags
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - when: on_success

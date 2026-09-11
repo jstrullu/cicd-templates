@@ -1,0 +1,61 @@
+spec:
+  inputs:
+    jsonFile:
+      description: 'Nom du fichier JSON de version'
+      type: string
+      default: 'cicd.json'
+    versionIncrement:
+      description: "Niveau de bump par défaut (patch, minor, major) — ignoré en mode git-sha"
+      type: string
+      default: 'patch'
+    versioningStrategy:
+      description: >
+        Stratégie de versionnement :
+        semver (défaut) = cicd.json + npm semver, comme Azure/GitHub Actions.
+        git-sha = tag court git rev-parse --short=7 HEAD, pas de lecture/écriture
+        de cicd.json — pas de commit/tag/push de version, aligné sur ce que
+        font déjà les 2 autres providers en git-sha.
+      type: string
+      default: 'semver'
+      options:
+        - semver
+        - git-sha
+---
+# Portage GitLab du module de versioning sémantique existant sur Azure
+# Pipelines (jobs/json_semantic_version.yml) et GitHub Actions
+# (actions/semantic-version) — même contrat, mêmes deux stratégies.
+#
+# Docker/deploy restent hors scope ici (CICD-1) : ce fichier ne fournit
+# QUE le stage Versioning, à inclure en amont de build/test/finalization
+# dans le .gitlab-ci.yml du consommateur.
+#
+# Sortie exposée à la suite du pipeline via un artifact dotarg.env
+# (dotenv), lu avec `variables:` + `artifacts.reports.dotenv` — c'est
+# l'équivalent GitLab des outputs de stage Azure / outputs de job GitHub.
+
+stages:
+  - versioning
+
+versioning:
+  stage: versioning
+  image: node:20-alpine
+  script:
+    - |
+      if [ "$[[ inputs.versioningStrategy ]]" = "git-sha" ]; then
+        VERSION=$(git rev-parse --short=7 HEAD)
+        echo "Using git-sha versioning strategy: $VERSION"
+      else
+        apk add --no-cache jq git >/dev/null
+        JSON_FILE="$[[ inputs.jsonFile ]]"
+        test -f "$JSON_FILE" || echo '{"version": "0.0.0"}' > "$JSON_FILE"
+        CURRENT_VERSION=$(jq -r '.version' "$JSON_FILE")
+        npm install -g semver >/dev/null 2>&1
+        VERSION=$(semver "$CURRENT_VERSION" -i "$[[ inputs.versionIncrement ]]")
+        echo "Bumped $CURRENT_VERSION -> $VERSION"
+      fi
+      DOCKER_TAG=$(echo "$VERSION" | tr '[:upper:]' '[:lower:]')
+      echo "RELEASE_VERSION=$VERSION" >> version.env
+      echo "DOCKER_TAG=$DOCKER_TAG" >> version.env
+  artifacts:
+    reports:
+      dotenv: version.env
