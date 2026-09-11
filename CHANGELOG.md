@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- CICD-2: hello GitLab - minimal 1-stage/1-job pipeline
+
 ### Fixed
 - link variable groups into Docker build/deploy stages
 
