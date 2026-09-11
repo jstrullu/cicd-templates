@@ -318,12 +318,12 @@ stages:
 
 **Status: early / structurally verified only, not yet run against a real GitLab runner** (no GitLab account/runner available at the time of writing — see CICD-2 through CICD-5). .NET build + test only; Docker, deploy, and versioning are separate future tickets, not covered here.
 
+`cicd-templates` lives on **GitHub**, not on a GitLab instance, so `include:project:` (same-instance only) does not apply here. Use `include:remote:` against the raw GitHub URL instead — it supports `inputs:` exactly like `project:` does:
+
 ```yaml
 # .gitlab-ci.yml
 include:
-  - project: 'jstrullu/cicd-templates'
-    ref: main
-    file: 'gitlab-ci/dotnet_pipeline.yml'
+  - remote: 'https://raw.githubusercontent.com/jstrullu/cicd-templates/master/gitlab-ci/dotnet_pipeline.yml'
     inputs:
       dotnetSdkVersion: '10.0'   # optional, defaults to '10.0'
 
@@ -331,6 +331,8 @@ stages:
   - build
   - test
 ```
+
+If cicd-templates is ever mirrored onto the same GitLab instance as the consumer (self-hosted GitLab, once available), `include:project:` becomes the better option — it resolves by ref/branch server-side instead of pinning a raw URL.
 
 ## GitHub Actions Examples
 
