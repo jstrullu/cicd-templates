@@ -1,0 +1,17 @@
+# CICD-2 — Hello GitLab : pipeline minimal pour apprivoiser GitLab CI
+# avant de porter quoi que ce soit de .NET dessus (même logique que MAUI
+# mis en dernier sur Belote : ne pas cumuler "apprendre le provider" et
+# "porter la stack" dans le même ticket).
+#
+# Fini = ce pipeline s'exécute réellement sur un runner GitLab et affiche
+# sa sortie. Aucune notion .NET, aucun template réutilisable ici — ça
+# viendra dans les tickets suivants (CICD-3/4/5).
+
+stages:
+  - hello
+
+hello_world:
+  stage: hello
+  image: alpine:3
+  script:
+    - echo "Hello GitLab — cicd-templates CICD-2"
