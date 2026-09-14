@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-14
+
 ### Changed
 - CICD-21: semantic versioning + finalization for the GitLab .NET stack
 - CICD-5: extract reusable GitLab CI template for .NET build+test
