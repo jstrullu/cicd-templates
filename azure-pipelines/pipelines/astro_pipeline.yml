@@ -71,6 +71,15 @@ parameters:
     displayName: Extra env vars for typecheck/build, one KEY=VALUE per line (e.g. a monorepo client selector)
     type: string
     default: ''
+  # Links an Azure DevOps variable group into the Docker_Build_And_Publish
+  # stage — needed when a --build-arg references a secret (e.g. a Google
+  # Analytics ID or an API key baked into the frontend bundle at build
+  # time). Empty by default: zero behavior change for every existing
+  # consumer. Mirrors dockerBuildVariableGroup on dotnetcore_pipeline.yml.
+  - name: dockerBuildVariableGroup
+    displayName: Variable group to link into the Docker build stage (secrets referenced by dockerBuildArgs). Leave empty to skip.
+    type: string
+    default: ''
   - name: sonarKey
     type: string
     default: ''
@@ -185,7 +194,10 @@ stages:
   - stage: Docker_Build_And_Publish
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
     variables:
-      version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      - name: version
+        value: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+      - ${{ if ne(parameters.dockerBuildVariableGroup, '') }}:
+        - group: ${{ parameters.dockerBuildVariableGroup }}
     dependsOn:
       - Initialization
       - Build_And_Typecheck
