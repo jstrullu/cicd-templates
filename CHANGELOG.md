@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- link variable group into Docker build stage
+
+
 ## [1.3.0] - 2026-09-14
 
 ### Changed
