@@ -39,9 +39,15 @@ parameters:
     displayName: Extra env vars for typecheck/build, one KEY=VALUE per line (e.g. a monorepo client selector)
     type: string
     default: ''
+  - name: pool
+    displayName: Agent pool name
+    type: string
+    default: 'Self-Hosted-K3s'
 
 jobs:
   - job: Build_Typecheck
+    pool:
+      name: ${{ parameters.pool }}
     timeoutInMinutes: 30
     steps:
     - checkout: self

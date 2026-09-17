@@ -12,9 +12,14 @@
   - name: sonarConnection
     type: string
     default: Sonar
+  - name: pool
+    type: string
+    default: 'Self-Hosted-K3s'
 
 jobs:
   - job: BuildAndTest
+    pool:
+      name: ${{ parameters.pool }}
     timeoutInMinutes: 30
     steps:
       - checkout: self
