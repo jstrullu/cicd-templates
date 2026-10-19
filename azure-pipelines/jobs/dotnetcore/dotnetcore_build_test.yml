@@ -29,16 +29,21 @@ jobs:
         parameters:
           jsonFile: ${{ parameters.jsonFile }}
           releaseVersion: ${{ parameters.projectVersion }}
-      - task: PowerShell@2
+      # Bash plutôt que PowerShell : pwsh n'est pas installé sur les agents auto-hébergés Linux.
+      # Seule la partie numérique de la version (sans suffixe -rc, -SNAPSHOT…) est valide pour AssemblyVersion.
+      - bash: |
+          PROJECT_FILE='${{ parameters.projectFile }}'
+          VERSION='${{ parameters.projectVersion }}'
+          ASSEMBLY_VERSION="${VERSION%%-*}"
+          if ! echo "$ASSEMBLY_VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$'; then
+            echo "Version '$VERSION' non numérique (stratégie git-sha ?) : AssemblyVersion inchangée"
+          elif grep -q '<AssemblyVersion>' "$PROJECT_FILE"; then
+            sed -i "s|<AssemblyVersion>[^<]*</AssemblyVersion>|<AssemblyVersion>$ASSEMBLY_VERSION</AssemblyVersion>|" "$PROJECT_FILE"
+            grep '<AssemblyVersion>' "$PROJECT_FILE"
+          else
+            echo "Pas de <AssemblyVersion> dans $PROJECT_FILE : rien à mettre à jour"
+          fi
         displayName: 'Assembly Version Generation'
-        inputs:
-          targetType: 'inline'
-          script: |
-            $ProjectFile = '${{ parameters.projectFile }}'
-            # get a new line with <AssemblyVersion> tag and new version number
-            $NewAssemblyVersionLine = '$(assemblyLine)' -replace '$(currentVersion)', '${{ parameters.projectVersion }}'
-            # replace the old line with the <AssemblyVersion> tag with a new one
-            (Get-Content $ProjectFile) | Foreach-Object {$_ -replace '$(assemblyLine)', $NewAssemblyVersionLine} | Set-Content $ProjectFile
       
       - ${{ if ne(parameters.sonarProjectKey, '') }}:
         - task: SonarQubePrepare@5

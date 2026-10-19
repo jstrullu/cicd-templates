@@ -110,11 +110,14 @@ jobs:
           JsonSource: ${{ parameters.jsonFile }}
           VariablePrefix: cicd
           MarkAsSecret: false
-      - task: Npm@1
+      # Installation dans un préfixe npm propre au job (Agent.TempDirectory) plutôt
+      # qu'en global : sur un agent auto-hébergé non root, `npm install -g` écrit
+      # dans /usr/lib/node_modules et échoue en EACCES.
+      - bash: |
+          SEMVER_PREFIX="$(Agent.TempDirectory)/semver-cli"
+          npm install --global --prefix "$SEMVER_PREFIX" --no-audit --no-fund semver@7
+          echo "##vso[task.prependpath]$SEMVER_PREFIX/bin"
         displayName: Install semver
-        inputs:
-          command: 'custom'
-          customCommand: 'install semver -g'
       - task: CmdLine@1
         displayName: Bump version
         inputs:
