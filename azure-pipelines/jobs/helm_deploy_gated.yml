@@ -23,7 +23,7 @@ parameters:
     type: string
     default: ''
   - name: deploymentName
-    displayName: Deployment name to wait on for rollout status (defaults to releaseName)
+    displayName: Deployment(s) to wait on for rollout status, space-separated (default - every Deployment labelled app.kubernetes.io/instance=<releaseName>, else deployment/<releaseName>)
     type: string
     default: ''
   - name: timeout
@@ -171,11 +171,35 @@ jobs:
               displayName: 'helm upgrade --install'
 
             - script: |
-                DEPLOYMENT="${{ parameters.deploymentName }}"
-                if [ -z "$DEPLOYMENT" ]; then
-                  DEPLOYMENT="${{ parameters.releaseName }}"
+                set -euo pipefail
+                NS="${{ parameters.namespace }}"
+                RELEASE="${{ parameters.releaseName }}"
+                TIMEOUT="${{ parameters.timeout }}"
+                # Un ou plusieurs noms séparés par des espaces. Vide : tous les Deployments
+                # de la release, sélectionnés par le label standard Helm
+                # app.kubernetes.io/instance=<release> (un chart peut en avoir plusieurs).
+                DEPLOYMENTS="${{ parameters.deploymentName }}"
+                if [ -z "$DEPLOYMENTS" ]; then
+                  DEPLOYMENTS=$(kubectl get deployments -n "$NS" -l "app.kubernetes.io/instance=$RELEASE" \
+                    -o jsonpath='{.items[*].metadata.name}')
+                  # Chart sans ce label : ancien comportement, deployment/<release>.
+                  if [ -z "$DEPLOYMENTS" ] && kubectl get deployment "$RELEASE" -n "$NS" >/dev/null 2>&1; then
+                    DEPLOYMENTS="$RELEASE"
+                  fi
                 fi
-                kubectl rollout status "deployment/$DEPLOYMENT" -n "${{ parameters.namespace }}" --timeout="${{ parameters.timeout }}"
+                if [ -z "$DEPLOYMENTS" ]; then
+                  echo "##[error]Aucun Deployment trouvé pour la release '$RELEASE' dans le namespace '$NS'" \
+                    "(ni label app.kubernetes.io/instance=$RELEASE, ni deployment/$RELEASE). Renseigner deploymentName."
+                  exit 1
+                fi
+                for DEPLOYMENT in $DEPLOYMENTS; do
+                  if ! kubectl get deployment "$DEPLOYMENT" -n "$NS" >/dev/null 2>&1; then
+                    echo "##[error]Deployment '$DEPLOYMENT' introuvable dans le namespace '$NS'. Vérifier deploymentName."
+                    exit 1
+                  fi
+                  echo "=== kubectl rollout status deployment/$DEPLOYMENT ==="
+                  kubectl rollout status "deployment/$DEPLOYMENT" -n "$NS" --timeout="$TIMEOUT"
+                done
               displayName: 'Verify rollout status'
 
             - script: kubectl get pods -n ${{ parameters.namespace }} -o wide
