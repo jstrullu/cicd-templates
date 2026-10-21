@@ -47,6 +47,18 @@ parameters:
     type: string
   - name: projectFile
     type: string
+  # Projets de tests lancés par le stage BuildAndTest — voir dotnetcore_build_test.yml.
+  - name: testProjects
+    displayName: Glob patterns of the test projects, one per line
+    type: string
+    default: |
+      **/*Tests.*.csproj
+      **/*.Tests.csproj
+      **/*.tests.csproj
+  - name: failOnMissingTests
+    displayName: Fail the build when no test project matches testProjects (warning otherwise)
+    type: boolean
+    default: false
   - name: dockerRegistry
     type: string
   - name: containerRegistry
@@ -204,6 +216,8 @@ stages:
           projectFile: ${{ parameters.projectFile }}
           projectVersion: $(version)
           jsonFile: ${{ parameters.jsonFile }}
+          testProjects: ${{ parameters.testProjects }}
+          failOnMissingTests: ${{ parameters.failOnMissingTests }}
       - ${{ if eq(parameters.enableMutationTesting, true) }}:
         - template: /azure-pipelines/jobs/dotnetcore/dotnetcore_mutation_test.yml
           parameters:

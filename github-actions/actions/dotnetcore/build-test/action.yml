@@ -24,6 +24,17 @@ inputs:
     description: 'Version du SDK .NET'
     required: false
     default: '8.0.x'
+  test-projects:
+    description: 'Motifs glob des projets de tests, un par ligne (sensibles à la casse)'
+    required: false
+    default: |
+      **/*Tests.*.csproj
+      **/*.Tests.csproj
+      **/*.tests.csproj
+  fail-on-missing-tests:
+    description: 'Échec si aucun projet de tests ne correspond à test-projects (avertissement sinon)'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
@@ -85,11 +96,38 @@ runs:
       # Testing Platform (MTP) — il repose sur l'infrastructure VSTest data collector,
       # que MTP ne supporte pas. Sur un projet MTP, la couverture est silencieusement
       # vide (pas d'erreur). Si c'est votre cas, cette action ne convient pas telle quelle.
+      #
+      # Un `dotnet test` par projet trouvé : la CLI n'accepte qu'un projet par appel.
+      env:
+        TEST_PROJECTS: ${{ inputs.test-projects }}
+        FAIL_ON_MISSING_TESTS: ${{ inputs.fail-on-missing-tests }}
       run: |
-        dotnet test **/*Tests.*.csproj \
-          --no-build -c Release \
-          --logger "trx;LogFileName=TEST.xml" \
-          --collect:"XPlat Code Coverage;Format=cobertura,opencover" || true
+        shopt -s globstar nullglob
+        found=()
+        while IFS= read -r pattern; do
+          pattern="${pattern//[[:space:]]/}"
+          [ -z "$pattern" ] && continue
+          for project in $pattern; do
+            found+=("$project")
+          done
+        done <<< "$TEST_PROJECTS"
+        if [ ${#found[@]} -eq 0 ]; then
+          message="Aucun projet de tests ne correspond à l'input test-projects : aucun test n'est exécuté."
+          if [ "${FAIL_ON_MISSING_TESTS,,}" = 'true' ]; then
+            echo "::error::$message"
+            exit 1
+          fi
+          echo "::warning::$message"
+          exit 0
+        fi
+        mapfile -t projects < <(printf '%s\n' "${found[@]}" | sort -u)
+        for project in "${projects[@]}"; do
+          echo "Tests de $project"
+          dotnet test "$project" \
+            --no-build -c Release \
+            --logger "trx;LogFileName=TEST.xml" \
+            --collect:"XPlat Code Coverage;Format=cobertura,opencover" || true
+        done
 
     - name: SonarQube End
       if: inputs.sonar-project-key != ''

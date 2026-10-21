@@ -69,6 +69,29 @@ Some Angular and Flutter Sonar steps are currently commented out in the build te
 
 ---
 
+## .NET Tests and Coverage
+
+### "Aucun projet de tests ne correspond au paramètre testProjects"
+
+No test project matches the `testProjects` patterns (default: `**/*Tests.*.csproj`,
+`**/*.Tests.csproj`, `**/*.tests.csproj`), so no test runs. Check the name of your test
+project — matching is case-sensitive on Linux agents — and pass your own patterns if needed:
+
+```yaml
+testProjects: |
+  tests/**/*.UnitTests.csproj
+```
+
+Set `failOnMissingTests: true` to make this a build failure instead of a warning.
+
+### "Aucun fichier coverage.opencover.xml" / no coverage published
+
+Tests ran but produced no coverage file: the test project must reference
+`coverlet.collector`. ReportGenerator and the coverage publication are skipped. Projects on
+Microsoft Testing Platform (MTP) get no coverage from `coverlet.collector`.
+
+---
+
 ## Service Connection Errors (Azure DevOps)
 
 ### "Service connection not found"
