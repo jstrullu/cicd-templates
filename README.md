@@ -142,6 +142,35 @@ Most templates accept these common parameters:
 | `containerRegistry` | Azure DevOps service connection for Docker | - |
 | `appName` | Application name (used for Kubernetes namespace) | `$(Build.Repository.Name)` |
 
+### .NET Core test projects
+
+`dotnetcore_pipeline.yml` runs `dotnet test` on every project matching `testProjects`
+(GitHub Actions: the `test-projects` input of `actions/dotnetcore/build-test`), one glob per line.
+Matching is case-sensitive on Linux agents. The default covers the usual naming schemes:
+
+```yaml
+testProjects: |
+  **/*Tests.*.csproj
+  **/*.Tests.csproj
+  **/*.tests.csproj
+```
+
+A line starting with `!` excludes the projects it matches (e.g. `!**/*.IntegrationTests.csproj`),
+lines are applied in order. Only existing `.csproj` files count: an explicit path to a missing
+file matches nothing.
+
+When no project matches, the build is **not** silently green:
+
+- by default (`failOnMissingTests: false`), the job logs a warning and ends `succeededWithIssues`;
+- with `failOnMissingTests: true` (`fail-on-missing-tests: 'true'`), the job fails.
+
+Warning is the default so that a repository without tests yet keeps building; set
+`failOnMissingTests: true` once the repository has tests, so a renamed test project breaks the build.
+
+ReportGenerator and the coverage publication only run when `coverage.opencover.xml` files exist.
+Coverage needs the test projects to reference `coverlet.collector` (VSTest only — not compatible
+with Microsoft Testing Platform).
+
 ## Git Flow Strategies
 
 Set `gitFlowType` to choose how branches map to environments, versioning, and deployment:

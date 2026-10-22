@@ -15,12 +15,30 @@
   - name: pool
     type: string
     default: 'Self-Hosted-K3s'
+  # Motifs glob des projets de tests, un par ligne, passés tels quels à `dotnet test`.
+  # Le défaut garde l'ancien motif (*Tests.*.csproj) et ajoute *.Tests.csproj et
+  # *.tests.csproj : la recherche est sensible à la casse sur les agents Linux.
+  - name: testProjects
+    type: string
+    default: |
+      **/*Tests.*.csproj
+      **/*.Tests.csproj
+      **/*.tests.csproj
+  # Aucun projet de tests trouvé : avertissement (défaut, le job finit en
+  # « succeededWithIssues ») ou échec du job si true.
+  - name: failOnMissingTests
+    type: boolean
+    default: false
 
 jobs:
   - job: BuildAndTest
     pool:
       name: ${{ parameters.pool }}
     timeoutInMinutes: 30
+    # Le restore doit écrire dans le dossier mis en cache par Cache@2 : sans cela, à
+    # chaque cache miss, la sauvegarde post-job échoue (tar : dossier inexistant).
+    variables:
+      NUGET_PACKAGES: $(Pipeline.Workspace)/.nuget/packages
     steps:
       - checkout: self
         clean: true
@@ -73,12 +91,50 @@ jobs:
         inputs:
           projects: '**/*.csproj'
           arguments: '--no-restore -c Release'
+      # Même résolution des motifs que la tâche de tests (globstar, sensible à la casse,
+      # motifs « ! » qui excluent, dans l'ordre) : rend visible l'absence de projet de
+      # tests au lieu de la laisser passer en silence. Seuls les fichiers existants comptent.
+      - bash: |
+          shopt -s globstar nullglob
+          declare -A found=()
+          while IFS= read -r pattern; do
+            pattern="${pattern//[[:space:]]/}"
+            [ -z "$pattern" ] && continue
+            if [ "${pattern:0:1}" = '!' ]; then
+              for project in ${pattern:1}; do
+                unset "found[$project]"
+              done
+            else
+              for project in $pattern; do
+                if [ -f "$project" ]; then
+                  found["$project"]=1
+                fi
+              done
+            fi
+          done <<'MOTIFS'
+          ${{ parameters.testProjects }}
+          MOTIFS
+          if [ ${#found[@]} -eq 0 ]; then
+            echo "##vso[task.setvariable variable=testProjectsFound]false"
+            message="Aucun projet de tests ne correspond au paramètre testProjects : aucun test n'est exécuté."
+            failOnMissingTests='${{ parameters.failOnMissingTests }}'
+            if [ "${failOnMissingTests,,}" = 'true' ]; then
+              echo "##vso[task.logissue type=error]$message"
+              exit 1
+            fi
+            echo "##vso[task.logissue type=warning]$message"
+            echo "##vso[task.complete result=SucceededWithIssues;]"
+          else
+            echo "##vso[task.setvariable variable=testProjectsFound]true"
+            echo "Projets de tests trouvés :"
+            printf '  %s\n' "${!found[@]}" | sort
+          fi
+        displayName: 'Recherche des projets de tests'
       - task: DotNetCoreCLI@2
         displayName: 'Unit tests (coverlet.collector, cross-platform)'
         inputs:
           command: 'test'
-          projects: |
-            **/*Tests.*.csproj
+          projects: ${{ parameters.testProjects }}
           # XPlat Code Coverage = coverlet.collector, works on Linux/macOS/Windows
           # (unlike the old VSTest "Code coverage" collector, Windows-only).
           # Requires the consumer's test project to reference coverlet.collector.
@@ -93,10 +149,23 @@ jobs:
           # If that's your setup, this job is not the right fit as-is.
           arguments: '--no-build -c Release --logger trx;LogFileName=TEST.xml --collect:"XPlat Code Coverage;Format=cobertura,opencover"'
           publishTestResults: false
-      - script: |
-          files=$(find $(pwd)/ -name coverage.opencover.xml -type f -print0 | tr '\0' ';')
-          echo $files
-          echo "##vso[task.setvariable variable=coverageFiles;]$files"
+      # ReportGenerator sort en code 1 quand -reports: est vide : il ne tourne, ni la
+      # publication de couverture, que si des fichiers de couverture existent.
+      - bash: |
+          files=$(find "$PWD" -name coverage.opencover.xml -type f -print0 | tr '\0' ';')
+          if [ -n "$files" ]; then
+            echo "$files"
+            echo "##vso[task.setvariable variable=coverageFiles]$files"
+            echo "##vso[task.setvariable variable=hasCoverageFiles]true"
+          else
+            echo "##vso[task.setvariable variable=hasCoverageFiles]false"
+            message="Aucun fichier coverage.opencover.xml : ReportGenerator et la publication de couverture sont ignorés."
+            if [ "${TESTPROJECTSFOUND:-}" = 'true' ]; then
+              echo "##vso[task.logissue type=warning]$message Les projets de tests doivent référencer coverlet.collector."
+            else
+              echo "$message"
+            fi
+          fi
         displayName: 'Get coverage files path'
       - task: PublishTestResults@2
         displayName: 'Publish Test Results'
@@ -115,6 +184,7 @@ jobs:
             pollingTimeoutSec: '300'
       - task: reportgenerator@5
         displayName: 'Report Generator'
+        condition: and(succeeded(), eq(variables['hasCoverageFiles'], 'true'))
         continueOnError: true
         inputs:
           reports: '$(coverageFiles)'
@@ -122,6 +192,7 @@ jobs:
           verbosity: Error
       - task: PublishCodeCoverageResults@1
         displayName: 'Publish code coverage'
+        condition: and(succeeded(), eq(variables['hasCoverageFiles'], 'true'))
         inputs:
           codeCoverageTool: Cobertura
           summaryFileLocation: './coveragereport/Cobertura.xml'
