@@ -35,6 +35,10 @@ jobs:
     pool:
       name: ${{ parameters.pool }}
     timeoutInMinutes: 30
+    # Le restore doit écrire dans le dossier mis en cache par Cache@2 : sans cela, à
+    # chaque cache miss, la sauvegarde post-job échoue (tar : dossier inexistant).
+    variables:
+      NUGET_PACKAGES: $(Pipeline.Workspace)/.nuget/packages
     steps:
       - checkout: self
         clean: true
