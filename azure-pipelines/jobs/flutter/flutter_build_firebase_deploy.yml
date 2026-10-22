@@ -25,14 +25,12 @@ jobs:
               inputs:
                 mode: 'auto'
                 channel: 'stable'
-            - task: shellexec@0
+            - bash: |
+                sudo wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O - | sudo apt-key add -
+                sudo wget https://storage.googleapis.com/download.dartlang.org/linux/debian/dart_stable.list -O /etc/apt/sources.list.d/dart_stable.list
+                sudo apt-get update
+                sudo apt-get install dart
               displayName: 'Install Dart'
-              inputs:
-                code: |
-                  sudo wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O - | sudo apt-key add -
-                  sudo wget https://storage.googleapis.com/download.dartlang.org/linux/debian/dart_stable.list -O /etc/apt/sources.list.d/dart_stable.list
-                  sudo apt-get update
-                  sudo apt-get install dart
             - task: FlutterCommand@0
               displayName: 'Cider Activation'
               inputs:
@@ -45,11 +43,8 @@ jobs:
                 VERSION_TAG=`cider version` && echo "##vso[task.setvariable variable=releaseVersion]$VERSION_TAG"
               displayName: 'Getting actual version'
 
-            - task: CmdLine@1
+            - bash: echo "##vso[task.setvariable variable=imageTag]$(Build.SourceBranchName)-$(releaseVersion)"
               displayName: 'Version tag creation'
-              inputs:
-                filename: sh
-                arguments: -c "echo \"##vso[task.setvariable variable=imageTag]$(Build.SourceBranchName)-$(releaseVersion)\"
 
             - ${{ if ne(parameters.sonarKey, '') }}:
               - task: SonarQubePrepare@5
@@ -85,12 +80,10 @@ jobs:
                 versionSpec: '18.x'
               displayName: Install Node
 
-            - task: shellexec@0
+            - bash: |
+                cd /home/vsts/work/1/s/src/tools/
+                node environment-generator ${{ parameters.environment }}
               displayName: Set Environment Config
-              inputs:
-                code: |
-                  cd /home/vsts/work/1/s/src/tools/
-                  node environment-generator ${{ parameters.environment }}
 
             - task: FlutterBuild@0
               displayName: 'Build project for web'
@@ -120,12 +113,10 @@ jobs:
             #     targetdir: './coveragereport'
             #     sourcedirs: './src/'
 
-            # - task: PublishCodeCoverageResults@1
+            # - task: PublishCodeCoverageResults@2
             #   displayName: 'Publish test result'
             #   inputs:
-            #     codeCoverageTool: Cobertura
             #     summaryFileLocation: './coveragereport/Cobertura.xml'
-            #     reportDirectory: './coveragereport'
             #     pathToSources: './src/'
 
             - script: |
