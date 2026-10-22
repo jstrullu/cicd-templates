@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Merge commit '3edd3f47bf4eadcb33170de77fb204752c968ec9' into work/2-cicd-29-motif-des-tests-net-pa
 
 ### Fixed
+- BOM dans cicd.json et .NET pour la couverture Flutter (CICD-28)
+- remplacer les tâches Node en fin de vie (CICD-28)
 - ne compter que les projets de tests existants
 - remplir le dossier du cache NuGet (NUGET_PACKAGES)
 - motif des projets de tests paramétrable (CICD-29)
