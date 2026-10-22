@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Merge commit '3edd3f47bf4eadcb33170de77fb204752c968ec9' into work/2-cicd-29-motif-des-tests-net-pa
+
 ### Fixed
+- ne compter que les projets de tests existants
+- remplir le dossier du cache NuGet (NUGET_PACKAGES)
+- motif des projets de tests paramétrable (CICD-29)
 - vérifier tous les Deployments de la release après helm deploy
 
 
