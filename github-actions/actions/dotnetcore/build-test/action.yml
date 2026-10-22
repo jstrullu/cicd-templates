@@ -102,14 +102,23 @@ runs:
         TEST_PROJECTS: ${{ inputs.test-projects }}
         FAIL_ON_MISSING_TESTS: ${{ inputs.fail-on-missing-tests }}
       run: |
+        # Motifs « ! » : excluent, dans l'ordre. Seuls les fichiers existants comptent.
         shopt -s globstar nullglob
-        found=()
+        declare -A found=()
         while IFS= read -r pattern; do
           pattern="${pattern//[[:space:]]/}"
           [ -z "$pattern" ] && continue
-          for project in $pattern; do
-            found+=("$project")
-          done
+          if [ "${pattern:0:1}" = '!' ]; then
+            for project in ${pattern:1}; do
+              unset "found[$project]"
+            done
+          else
+            for project in $pattern; do
+              if [ -f "$project" ]; then
+                found["$project"]=1
+              fi
+            done
+          fi
         done <<< "$TEST_PROJECTS"
         if [ ${#found[@]} -eq 0 ]; then
           message="Aucun projet de tests ne correspond à l'input test-projects : aucun test n'est exécuté."
@@ -120,7 +129,7 @@ runs:
           echo "::warning::$message"
           exit 0
         fi
-        mapfile -t projects < <(printf '%s\n' "${found[@]}" | sort -u)
+        mapfile -t projects < <(printf '%s\n' "${!found[@]}" | sort)
         for project in "${projects[@]}"; do
           echo "Tests de $project"
           dotnet test "$project" \

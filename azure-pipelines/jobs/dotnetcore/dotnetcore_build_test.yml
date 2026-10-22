@@ -91,17 +91,26 @@ jobs:
         inputs:
           projects: '**/*.csproj'
           arguments: '--no-restore -c Release'
-      # Même résolution des motifs que la tâche de tests (globstar, sensible à la casse) :
-      # rend visible l'absence de projet de tests au lieu de la laisser passer en silence.
+      # Même résolution des motifs que la tâche de tests (globstar, sensible à la casse,
+      # motifs « ! » qui excluent, dans l'ordre) : rend visible l'absence de projet de
+      # tests au lieu de la laisser passer en silence. Seuls les fichiers existants comptent.
       - bash: |
           shopt -s globstar nullglob
-          found=()
+          declare -A found=()
           while IFS= read -r pattern; do
             pattern="${pattern//[[:space:]]/}"
             [ -z "$pattern" ] && continue
-            for project in $pattern; do
-              found+=("$project")
-            done
+            if [ "${pattern:0:1}" = '!' ]; then
+              for project in ${pattern:1}; do
+                unset "found[$project]"
+              done
+            else
+              for project in $pattern; do
+                if [ -f "$project" ]; then
+                  found["$project"]=1
+                fi
+              done
+            fi
           done <<'MOTIFS'
           ${{ parameters.testProjects }}
           MOTIFS
@@ -118,7 +127,7 @@ jobs:
           else
             echo "##vso[task.setvariable variable=testProjectsFound]true"
             echo "Projets de tests trouvés :"
-            printf '  %s\n' "${found[@]}" | sort -u
+            printf '  %s\n' "${!found[@]}" | sort
           fi
         displayName: 'Recherche des projets de tests'
       - task: DotNetCoreCLI@2

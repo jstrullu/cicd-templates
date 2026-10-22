@@ -155,6 +155,10 @@ testProjects: |
   **/*.tests.csproj
 ```
 
+A line starting with `!` excludes the projects it matches (e.g. `!**/*.IntegrationTests.csproj`),
+lines are applied in order. Only existing `.csproj` files count: an explicit path to a missing
+file matches nothing.
+
 When no project matches, the build is **not** silently green:
 
 - by default (`failOnMissingTests: false`), the job logs a warning and ends `succeededWithIssues`;
