@@ -93,6 +93,13 @@ jobs:
           targetdir: './coveragereport'
           sourcedirs: './src/'
 
+      # PublishCodeCoverageResults@2 s'appuie sur .NET : runtime installé pour les agents qui ne l'ont pas.
+      - task: UseDotNet@2
+        displayName: 'Install .NET runtime (coverage publishing)'
+        inputs:
+          packageType: 'runtime'
+          version: '8.x'
+
       - task: PublishCodeCoverageResults@2
         displayName: 'Publish test result'
         inputs:
