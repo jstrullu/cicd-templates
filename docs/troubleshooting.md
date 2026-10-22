@@ -172,6 +172,13 @@ run `helm upgrade --install --atomic`, verify the rollout, and dump
 diagnostics (pod status, recent events, Helm history) on failure — matching
 the pattern used by every real consumer pipeline in the org's portfolio.
 
+The rollout check waits on every Deployment labelled
+`app.kubernetes.io/instance=<release>` (a chart may ship several, e.g. a
+backend and a frontend), falling back to `deployment/<release>` for charts
+without that label. Set `deploymentName` (Azure) / `deployment-name`
+(GitHub Actions) to one or more space-separated names to override it. The
+step fails with an explicit message when no Deployment matches.
+
 ### Token replacement not working
 
 The `kube_deploy` job replaces tokens in manifest files from `.kube/`. Ensure:
