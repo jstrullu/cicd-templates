@@ -83,19 +83,10 @@ jobs:
           git config --global user.email "${{ parameters.gitUserEmail }}"
           git config --global user.name "${{ parameters.gitUserName }}"
         displayName: Set Git User
-      - task: CmdLine@1
+      - bash: git commit -am "***NO_CI*** Set release version to ${{parameters.releaseVersion}}"
         displayName: Commit version
-        inputs:
-          filename: git
-          arguments: 'commit -am "***NO_CI*** Set release version to ${{parameters.releaseVersion}}"'
-      - task: CmdLine@1
+      - bash: git tag -fa "$(Build.SourceBranchName)-${{parameters.releaseVersion}}" -m "${{parameters.releaseVersion}}"
         displayName: Tag version
-        inputs:
-          filename: git
-          arguments: 'tag -fa $(Build.SourceBranchName)-${{parameters.releaseVersion}} -m ${{parameters.releaseVersion}}'
         condition: and(succeeded(), eq('${{ parameters.shouldTag }}', 'true'))
-      - task: CmdLine@1
+      - bash: git -c push.default=simple push origin "HEAD:$(Build.SourceBranch)" --follow-tags
         displayName: Push commit and tag
-        inputs:
-          filename: git
-          arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'

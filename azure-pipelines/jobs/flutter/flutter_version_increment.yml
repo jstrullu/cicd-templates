@@ -43,14 +43,12 @@ jobs:
       - template: ../../steps/set_version_increment.yml
         parameters:
           versionIncrement: ${{ parameters.versionIncrement }}
-      - task: shellexec@0
+      - bash: |
+          sudo wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O - | sudo apt-key add -
+          sudo wget https://storage.googleapis.com/download.dartlang.org/linux/debian/dart_stable.list -O /etc/apt/sources.list.d/dart_stable.list
+          sudo apt-get update
+          sudo apt-get install dart
         displayName: 'Dart install'
-        inputs:
-          code: |
-            sudo wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O - | sudo apt-key add -
-            sudo wget https://storage.googleapis.com/download.dartlang.org/linux/debian/dart_stable.list -O /etc/apt/sources.list.d/dart_stable.list
-            sudo apt-get update
-            sudo apt-get install dart
       - task: FlutterCommand@0
         displayName: 'Cider activation'
         inputs:
@@ -80,33 +78,18 @@ jobs:
           git config --global user.email "ci-service@example.com"
           git config --global user.name "CI Service"
         displayName: 'Set Git User'
-      - task: CmdLine@1
+      - bash: git commit -am "***NO_CI*** Set release version to $(releaseVersion)"
         displayName: 'Version commit'
-        inputs:
-          filename: git
-          arguments: 'commit -am "***NO_CI*** Set release version to $(releaseVersion)"'
         condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
-      - task: CmdLine@1
+      - bash: git tag -fa "$(Build.SourceBranchName)-$(releaseVersion)" -m "$(releaseVersion)"
         displayName: 'Version tag'
-        inputs:
-          filename: git
-          arguments: 'tag -fa $(Build.SourceBranchName)-$(releaseVersion) -m $(releaseVersion)'
         condition: and(succeeded(), eq(variables['gitflow.shouldTag'], 'true'))
-      - task: CmdLine@1
+      - bash: git -c push.default=simple push origin "HEAD:$(Build.SourceBranch)" --follow-tags
         displayName: 'Commit and tag push'
-        inputs:
-          filename: git
-          arguments: '-c push.default=simple push origin HEAD:$(Build.SourceBranch) --follow-tags'
         condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
-      - task: CmdLine@1
+      - bash: echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"
         displayName: 'Pipeline name update'
-        inputs:
-          filename: sh
-          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) $(Build.SourceBranchName)-$(releaseVersion)"'
         condition: and(succeeded(), eq(variables['gitflow.shouldFinalize'], 'true'))
-      - task: CmdLine@1
+      - bash: echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) PR $(System.PullRequest.PullRequestId).$(System.PullRequest.PullRequestIteration)"
         displayName: 'Pullrequest pipeline name update'
-        inputs:
-          filename: sh
-          arguments: '-c echo "##vso[build.updatebuildnumber]$(Build.Repository.Name) PR $(System.PullRequest.PullRequestId).$(System.PullRequest.PullRequestIteration)"'
         condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))      
