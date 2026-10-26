@@ -124,6 +124,8 @@ parameters:
   # helm: helm upgrade --install direct on an agent already inside the target
   #   cluster (no kubeconfig needed), matching every real consumer pipeline
   #   in the org's portfolio.
+  # none: no Deploy stage — the pipeline only builds and publishes the image;
+  #   deployment is driven elsewhere (GitOps: Flux/Argo picks up the new tag).
   - name: deployMode
     displayName: Deploy mode
     type: string
@@ -131,6 +133,7 @@ parameters:
     values:
       - kube-manifest
       - helm
+      - none
   - name: helmChartPath
     displayName: Path to the Helm chart (helm mode)
     type: string
@@ -216,44 +219,47 @@ stages:
       - ${{ if eq(parameters.dockerPushMode, 'insecure-cli') }}:
         - template: /azure-pipelines/jobs/docker_build_push_insecure.yml
           parameters:
+            poolName: ${{ parameters.pool }}
             registry: ${{ parameters.dockerRegistry }}
             imageName: ${{ coalesce(parameters.dockerImageName, parameters.appName) }}
             projectVersion: $(version)
             alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
             insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
             buildArgs: ${{ parameters.dockerBuildArgs }}
+            containerRegistry: ${{ parameters.containerRegistry }}
 
-  - stage: Deploy
-    condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
-    dependsOn:
-      - Initialization
-      - Build_And_Typecheck
-      - Docker_Build_And_Publish
-    variables:
-      - name: BUILDID
-        value: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
-      - name: deployEnv
-        value: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
-      - ${{ if ne(parameters.deployVariableGroup, '') }}:
-        - group: ${{ parameters.deployVariableGroup }}
-    jobs:
-      - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
-        - template: /azure-pipelines/jobs/kube_deploy.yml
-          parameters:
-            env: $(deployEnv)
-            resource: ${{ parameters.appName }}
-            namespace: ${{ parameters.appName }}
-      - ${{ if eq(parameters.deployMode, 'helm') }}:
-        - template: /azure-pipelines/jobs/helm_deploy.yml
-          parameters:
-            releaseName: ${{ parameters.appName }}
-            namespace: ${{ parameters.appName }}
-            chartPath: ${{ parameters.helmChartPath }}
-            valuesFile: ${{ parameters.helmValuesFile }}
-            imageTag: $(BUILDID)
-            setValues: ${{ parameters.helmSetValues }}
-            registry: ${{ parameters.dockerRegistry }}
-            insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
+  - ${{ if ne(parameters.deployMode, 'none') }}:
+    - stage: Deploy
+      condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
+      dependsOn:
+        - Initialization
+        - Build_And_Typecheck
+        - Docker_Build_And_Publish
+      variables:
+        - name: BUILDID
+          value: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
+        - name: deployEnv
+          value: $[stageDependencies.Initialization.Versioning.outputs['gitflow.deployEnvironment']]
+        - ${{ if ne(parameters.deployVariableGroup, '') }}:
+          - group: ${{ parameters.deployVariableGroup }}
+      jobs:
+        - ${{ if eq(parameters.deployMode, 'kube-manifest') }}:
+          - template: /azure-pipelines/jobs/kube_deploy.yml
+            parameters:
+              env: $(deployEnv)
+              resource: ${{ parameters.appName }}
+              namespace: ${{ parameters.appName }}
+        - ${{ if eq(parameters.deployMode, 'helm') }}:
+          - template: /azure-pipelines/jobs/helm_deploy.yml
+            parameters:
+              releaseName: ${{ parameters.appName }}
+              namespace: ${{ parameters.appName }}
+              chartPath: ${{ parameters.helmChartPath }}
+              valuesFile: ${{ parameters.helmValuesFile }}
+              imageTag: $(BUILDID)
+              setValues: ${{ parameters.helmSetValues }}
+              registry: ${{ parameters.dockerRegistry }}
+              insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
 
   - stage: Finalization
     condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldFinalize'], 'true'))
@@ -261,7 +267,8 @@ stages:
       - Initialization
       - Build_And_Typecheck
       - Docker_Build_And_Publish
-      - Deploy
+      - ${{ if ne(parameters.deployMode, 'none') }}:
+        - Deploy
     variables:
       version: $[stageDependencies.Initialization.Versioning.outputs['version.DockerTag']]
       shouldTag: $[stageDependencies.Initialization.Versioning.outputs['gitflow.shouldTag']]

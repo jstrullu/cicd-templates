@@ -30,6 +30,12 @@ parameters:
     displayName: Extra --build-arg KEY=VALUE pairs, one per line (e.g. VITE_API_URL=$(API_URL))
     type: string
     default: ''
+  # Service connection Azure DevOps de type « Docker Registry » (ghcr.io, Docker Hub, ACR…).
+  # Vide = pas de login, comportement historique (registry in-cluster sans auth).
+  - name: containerRegistry
+    displayName: Service connection Docker Registry pour le login avant push (vide = sans login)
+    type: string
+    default: ''
 
 # CLI-direct docker build/push, for an in-cluster/self-hosted registry with no
 # Azure DevOps service connection (Docker@2's containerRegistry parameter
@@ -85,6 +91,13 @@ jobs:
             "${{ parameters.context }}"
         displayName: 'docker build (:${{ parameters.projectVersion }})'
 
+      - ${{ if ne(parameters.containerRegistry, '') }}:
+        - task: Docker@2
+          displayName: 'docker login (${{ parameters.containerRegistry }})'
+          inputs:
+            command: login
+            containerRegistry: '${{ parameters.containerRegistry }}'
+
       - script: |
           set -e
           docker push "$(image):${{ parameters.projectVersion }}"
@@ -92,3 +105,11 @@ jobs:
             docker push "$(image):latest"
           fi
         displayName: 'docker push (:${{ parameters.projectVersion }})'
+
+      - ${{ if ne(parameters.containerRegistry, '') }}:
+        - task: Docker@2
+          displayName: 'docker logout'
+          condition: always()
+          inputs:
+            command: logout
+            containerRegistry: '${{ parameters.containerRegistry }}'
