@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- login registry optionnel en mode cli, deployMode none
+
 ### Changed
 - Merge commit '3edd3f47bf4eadcb33170de77fb204752c968ec9' into work/2-cicd-29-motif-des-tests-net-pa
 
