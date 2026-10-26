@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- deployMode none et login registry pour dotnetcore_pipeline
 - login registry optionnel en mode cli, deployMode none
 
 ### Changed
