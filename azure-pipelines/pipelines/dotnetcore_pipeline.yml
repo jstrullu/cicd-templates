@@ -116,6 +116,8 @@ parameters:
   # helm: helm upgrade --install direct on an agent already inside the target
   #   cluster (no kubeconfig needed), matching every real consumer pipeline
   #   in the org's portfolio.
+  # none: no Deploy stage — the pipeline only builds and publishes the images;
+  #   deployment is driven elsewhere (GitOps: Flux/Argo picks up the new tag).
   - name: deployMode
     displayName: Deploy mode
     type: string
@@ -123,6 +125,7 @@ parameters:
     values:
       - kube-manifest
       - helm
+      - none
   - name: helmChartPath
     displayName: Path to the Helm chart (helm mode)
     type: string
@@ -253,23 +256,27 @@ stages:
       - ${{ if and(eq(parameters.dockerPushMode, 'insecure-cli'), eq(length(parameters.dockerImages), 0)) }}:
         - template: /azure-pipelines/jobs/docker_build_push_insecure.yml
           parameters:
+            poolName: ${{ parameters.pool }}
             registry: ${{ parameters.dockerRegistry }}
             imageName: ${{ coalesce(parameters.dockerImageName, parameters.appName) }}
             projectVersion: $(version)
             alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
             insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
             buildArgs: ${{ parameters.dockerBuildArgs }}
+            containerRegistry: ${{ parameters.containerRegistry }}
       - ${{ if and(eq(parameters.dockerPushMode, 'insecure-cli'), ne(length(parameters.dockerImages), 0)) }}:
         - template: /azure-pipelines/jobs/docker_build_push_insecure_multi.yml
           parameters:
+            poolName: ${{ parameters.pool }}
             registry: ${{ parameters.dockerRegistry }}
             appName: ${{ parameters.appName }}
             projectVersion: $(version)
             alsoTagLatest: ${{ parameters.dockerAlsoTagLatest }}
             insecureRegistryUrl: ${{ parameters.insecureRegistryUrl }}
             dockerImages: ${{ parameters.dockerImages }}
+            containerRegistry: ${{ parameters.containerRegistry }}
 
-  - ${{ if or(eq(parameters.enableStagedDeploy, false), ne(parameters.deployMode, 'helm')) }}:
+  - ${{ if and(ne(parameters.deployMode, 'none'), or(eq(parameters.enableStagedDeploy, false), ne(parameters.deployMode, 'helm'))) }}:
     - stage: Deploy
       condition: and(succeeded(), eq(dependencies.Initialization.outputs['Versioning.gitflow.shouldDeploy'], 'true'))
       dependsOn:
@@ -357,7 +364,7 @@ stages:
       - Initialization
       - BuildAndTest
       - Docker_Build_And_Publish
-      - ${{ if or(eq(parameters.enableStagedDeploy, false), ne(parameters.deployMode, 'helm')) }}:
+      - ${{ if and(ne(parameters.deployMode, 'none'), or(eq(parameters.enableStagedDeploy, false), ne(parameters.deployMode, 'helm'))) }}:
         - Deploy
       - ${{ if and(eq(parameters.enableStagedDeploy, true), eq(parameters.deployMode, 'helm')) }}:
         - Deploy_Prod
