@@ -42,7 +42,7 @@ parameters:
   - name: pool
     displayName: Agent pool name
     type: string
-    default: 'Self-Hosted-K3s'
+    default: 'k8s-dotnet'
 
 jobs:
   - job: Build_Typecheck

@@ -14,7 +14,7 @@
     default: Sonar
   - name: pool
     type: string
-    default: 'Self-Hosted-K3s'
+    default: 'k8s-dotnet'
   # Motifs glob des projets de tests, un par ligne, passés tels quels à `dotnet test`.
   # Le défaut garde l'ancien motif (*Tests.*.csproj) et ajoute *.Tests.csproj et
   # *.tests.csproj : la recherche est sensible à la casse sur les agents Linux.

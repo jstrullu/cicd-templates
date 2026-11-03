@@ -74,7 +74,7 @@ parameters:
   - name: pool
     displayName: Agent pool name for the Build_And_Typecheck stage
     type: string
-    default: 'Self-Hosted-K3s'
+    default: 'k8s-dotnet'
   # Links an Azure DevOps variable group into the Docker_Build_And_Publish
   # stage — needed when a --build-arg references a secret (e.g. a Google
   # Analytics ID or an API key baked into the frontend bundle at build

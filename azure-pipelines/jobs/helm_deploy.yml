@@ -2,7 +2,7 @@ parameters:
   - name: poolName
     displayName: Agent pool name (needs kubectl/helm context and network access to the cluster)
     type: string
-    default: 'Self-Hosted-K3s'
+    default: 'k8s-dotnet'
   - name: releaseName
     type: string
   - name: namespace
