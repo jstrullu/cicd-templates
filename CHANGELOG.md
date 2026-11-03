@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - login registry optionnel en mode cli, deployMode none
 
 ### Changed
+- pool par défaut k8s-dotnet (agents KEDA du cluster sisodistribution)
 - Merge commit '3edd3f47bf4eadcb33170de77fb204752c968ec9' into work/2-cicd-29-motif-des-tests-net-pa
 
 ### Fixed
